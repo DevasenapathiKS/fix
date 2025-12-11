@@ -1,0 +1,44 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.field {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 0.35rem 0.65rem;
+  background: #fff;
+}
+
+.field select {
+  width: 100%;
+  border: none;
+  font: inherit;
+  padding: 0.55rem 0.4rem;
+  outline: none;
+  background: transparent;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.error {
+  color: var(--accent-rose);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.hasError {
+  border-color: var(--accent-rose);
+}
+
+.fullWidth {
+  width: 100%;
+}

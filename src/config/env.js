@@ -1,0 +1,20 @@
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: Number(process.env.PORT) || 4000,
+  mongoUri: process.env.MONGODB_URI || 'mongodb+srv://devahari6465:l6MGWKtq303sbVv9@devahari6465.vok7c.mongodb.net/fixzep_test?retryWrites=true&w=majority&appName=devahari6465',
+  jwtSecret: process.env.JWT_SECRET || 'change-me',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  timezone: process.env.TIMEZONE || 'Asia/Kolkata',
+  adminTopic: process.env.ADMIN_NOTIFICATION_TOPIC || 'admin.notifications',
+  technicianTopic: process.env.TECHNICIAN_NOTIFICATION_TOPIC || 'technician.notifications',
+  defaultWorkingHours: {
+    start: process.env.DEFAULT_WORKING_HOURS_START || '08:00',
+    end: process.env.DEFAULT_WORKING_HOURS_END || '20:00'
+  }
+};
+
+export default env;

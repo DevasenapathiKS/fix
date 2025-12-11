@@ -1,0 +1,48 @@
+.card {
+  border-radius: 24px;
+  padding: 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.brand {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-800));
+}
+
+.teal {
+  background: linear-gradient(135deg, #1fd1b5, #0a9e8d);
+}
+
+.amber {
+  background: linear-gradient(135deg, #f4b740, #e48b00);
+}
+
+.label {
+  margin: 0;
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+.value {
+  margin: 0.3rem 0 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.trend {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  display: grid;
+  place-items: center;
+}

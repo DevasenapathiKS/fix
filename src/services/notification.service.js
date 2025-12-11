@@ -1,0 +1,35 @@
+import env from '../config/env.js';
+import { NOTIFICATION_EVENTS } from '../constants/index.js';
+import Notification from '../models/notification.model.js';
+
+class NotificationService {
+  async notifyAdmin(event, payload) {
+    return this.dispatch({ topic: env.adminTopic, event, payload });
+  }
+
+  async notifyTechnician(technicianId, event, payload) {
+    return this.dispatch({ topic: `${env.technicianTopic}.${technicianId}`, event, payload });
+  }
+
+  async notifyCustomer(customerId, event, payload) {
+    return this.dispatch({ topic: `customer.${customerId}`, event, payload });
+  }
+
+  async dispatch({ topic, event, payload }) {
+    // TODO: Integrate with actual provider (FCM, SNS, etc.)
+    // eslint-disable-next-line no-console
+    console.log('[Notification]', { topic, event, payload });
+    if (payload?.recipient) {
+      await Notification.create({
+        recipient: payload.recipient,
+        channel: 'in_app',
+        event,
+        payload
+      });
+    }
+    return true;
+  }
+}
+
+export const notificationService = new NotificationService();
+export { NOTIFICATION_EVENTS };

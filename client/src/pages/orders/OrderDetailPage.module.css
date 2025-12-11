@@ -1,0 +1,62 @@
+.layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.statusRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.value {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+}
+
+.techRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.approvalButtons {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.invoiceRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.reviewForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reviewForm select {
+  margin-top: 0.3rem;
+  border-radius: 10px;
+  padding: 0.4rem;
+}
+
+.reviewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.error {
+  color: var(--accent-rose);
+}

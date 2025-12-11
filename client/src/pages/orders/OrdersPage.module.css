@@ -1,0 +1,79 @@
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.statusGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.statusButton,
+.statusActive {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.statusActive {
+  border-color: var(--brand-500);
+  color: var(--brand-700);
+  background: rgba(42, 100, 216, 0.12);
+}
+
+.searchBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 0.4rem 0.8rem;
+}
+
+.searchBox input {
+  border: none;
+  outline: none;
+  font: inherit;
+}
+
+.ordersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.cardMeta {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.cardRow span {
+  color: var(--text-muted);
+}

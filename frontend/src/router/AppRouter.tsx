@@ -1,0 +1,37 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { ProtectedRoute } from '../components/common/ProtectedRoute';
+import { DashboardLayout } from '../layouts/DashboardLayout';
+import { LoginPage } from '../pages/LoginPage';
+import { DashboardPage } from '../pages/DashboardPage';
+import { OrdersPage } from '../pages/OrdersPage';
+import { CatalogPage } from '../pages/CatalogPage';
+import { CategoryDetailPage } from '../pages/CategoryDetailPage';
+import { SparePartsPage } from '../pages/SparePartsPage';
+import { CreateUserPage } from '../pages/CreateUserPage';
+import { TimeSlotsPage } from '../pages/TimeSlotsPage';
+import { TechniciansPage } from '../pages/TechniciansPage';
+
+const AppRouter = () => (
+  <Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route
+      element={
+        <ProtectedRoute>
+          <DashboardLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route path="/" element={<DashboardPage />} />
+      <Route path="/orders" element={<OrdersPage />} />
+      <Route path="/catalog" element={<CatalogPage />} />
+      <Route path="/catalog/:categoryId" element={<CategoryDetailPage />} />
+      <Route path="/technicians" element={<TechniciansPage />} />
+      <Route path="/spare-parts" element={<SparePartsPage />} />
+      <Route path="/time-slots" element={<TimeSlotsPage />} />
+      <Route path="/users/new" element={<CreateUserPage />} />
+    </Route>
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
+
+export default AppRouter;

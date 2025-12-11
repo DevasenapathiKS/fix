@@ -1,0 +1,64 @@
+.searchRow {
+  margin-bottom: 1.5rem;
+}
+
+.categoryStack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.categoryHeader {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.categoryDescription {
+  margin-top: -0.5rem;
+  color: var(--text-muted);
+}
+
+.serviceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.serviceCard {
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.serviceName {
+  margin: 0;
+  font-weight: 600;
+}
+
+.serviceMeta {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.serviceFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(42, 100, 216, 0.12);
+  color: var(--brand-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
