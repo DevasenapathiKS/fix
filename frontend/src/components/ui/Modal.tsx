@@ -7,14 +7,15 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  size?: 'md' | 'lg' | 'xl';
+  size?: 'md' | 'lg' | 'xl' | 'xxl';
   showCloseButton?: boolean;
 }
 
 const sizeClassMap: Record<NonNullable<ModalProps['size']>, string> = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
-  xl: 'max-w-4xl'
+  xl: 'max-w-4xl',
+  xxl: 'max-w-8xl'
 };
 
 export const Modal = ({ open, onClose, title, children, size = 'md', showCloseButton = false }: ModalProps) => (
