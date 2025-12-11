@@ -8,7 +8,7 @@ import { errorHandler, notFoundHandler } from './middlewares/error.middleware.js
 import swaggerSpec from './docs/swagger.js';
 
 const app = express();
-const distPath = path.resolve(process.cwd(), 'src', 'dist');
+const distPath = path.resolve(process.cwd(), 'frontend', 'dist');
 
 app.use(cors());
 app.use(express.json());
