@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders } from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://152.42.159.46:4000/api',
   timeout: 15_000
 });
 
