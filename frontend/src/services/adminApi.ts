@@ -79,7 +79,9 @@ export const OrdersAPI = {
   deleteMedia: (orderId: string, mediaId: string) =>
     extract<JobCardDetail>(apiClient.delete<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/media/${mediaId}`)),
   updatePaymentStatus: (orderId: string, payload: { status: 'pending' | 'partial' | 'paid' }) =>
-    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/payment-status`, payload))
+    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/payment-status`, payload)),
+  addHistoryNote: (orderId: string, payload: { message: string }) =>
+    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/history`, payload))
 };
 
 export const CatalogAPI = {

@@ -308,6 +308,7 @@ export const AdminService = {
         ? {
             id: jobCard._id,
             status: jobCard.status,
+            paymentStatus: jobCard.paymentStatus,
             estimateAmount: jobCard.estimateAmount,
             additionalCharges: jobCard.additionalCharges,
             finalAmount: jobCard.finalAmount,
@@ -339,6 +340,9 @@ export const AdminService = {
 
     const order = await Order.findById(orderId);
     if (!order) throw new ApiError(404, 'Order not found');
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Completed jobs are read-only');
+    }
 
     const allowedKinds = ['image', 'video', 'document'];
     const normalized = mediaItems
@@ -379,6 +383,9 @@ export const AdminService = {
 
     const order = await Order.findById(orderId);
     if (!order) throw new ApiError(404, 'Order not found');
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Completed jobs are read-only');
+    }
 
     const mediaItem = order.media?.id(mediaId);
     if (!mediaItem) {
@@ -411,6 +418,9 @@ export const AdminService = {
 
     const order = await Order.findById(orderId);
     if (!order) throw new ApiError(404, 'Order not found');
+    if (order.status === ORDER_STATUS.COMPLETED && status !== ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Completed jobs are read-only');
+    }
 
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
@@ -485,6 +495,14 @@ export const AdminService = {
       throw new ApiError(400, 'Invalid payment status');
     }
 
+    const order = await Order.findById(orderId).select('status');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Completed jobs are read-only');
+    }
+
     const jobCard = await JobCard.findOne({ order: orderId });
     if (!jobCard) {
       throw new ApiError(404, 'Job card not found for this order');
@@ -498,6 +516,31 @@ export const AdminService = {
       action: 'JOB_PAYMENT_STATUS_UPDATED',
       message: `Payment marked as ${paymentStatus}`,
       metadata: { paymentStatus },
+      performedBy: adminId
+    });
+
+    return this.getJobCardDetail(orderId);
+  },
+
+  async addOrderHistoryNote(orderId, message, adminId) {
+    if (!message || !message.trim()) {
+      throw new ApiError(400, 'Note message is required');
+    }
+
+    const order = await Order.findById(orderId).select('status');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Completed jobs are read-only');
+    }
+
+    const trimmed = message.trim().slice(0, 1000);
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'ADMIN_NOTE',
+      message: trimmed,
       performedBy: adminId
     });
 

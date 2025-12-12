@@ -26,7 +26,8 @@ import {
   updateOrderStatus,
   uploadOrderMedia,
   deleteOrderMedia,
-  updateOrderPaymentStatus
+  updateOrderPaymentStatus,
+  addOrderHistoryNote
 } from '../controllers/admin.controller.js';
 import { authenticate, allowAdminOnly } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
@@ -92,6 +93,15 @@ router.post(
     body('status').isIn(['pending', 'partial', 'paid'])
   ]),
   updateOrderPaymentStatus
+);
+
+router.post(
+  '/orders/:orderId/history',
+  validate([
+    param('orderId').isMongoId(),
+    body('message').isString().trim().isLength({ min: 1, max: 1000 })
+  ]),
+  addOrderHistoryNote
 );
 
 router.get('/technicians', listTechnicians);

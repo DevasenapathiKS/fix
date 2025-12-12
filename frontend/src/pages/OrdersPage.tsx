@@ -125,6 +125,7 @@ export const OrdersPage = () => {
   const [followUpReason, setFollowUpReason] = useState('');
   const [followUpAttachments, setFollowUpAttachments] = useState<FollowUpAttachment[]>([]);
   const [uploadedDocuments, setUploadedDocuments] = useState<FollowUpAttachment[]>([]);
+  const [activityNote, setActivityNote] = useState('');
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -214,6 +215,7 @@ export const OrdersPage = () => {
       setFollowUpReason('');
       setFollowUpAttachments([]);
       setUploadedDocuments([]);
+      setActivityNote('');
       return;
     }
     if (followUpInfo) {
@@ -341,8 +343,14 @@ export const OrdersPage = () => {
   const activeRescheduleOrder = rescheduleModal.order;
   const currentSlotLabel = activeRescheduleOrder?.preferredSlot?.label;
   const isFollowUpSelected = jobStatusChoice === 'follow_up';
+  const isOrderCompleted = jobCardDetail?.order?.status === 'completed';
 
   const handleFollowUpFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      event.target.value = '';
+      return;
+    }
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     files.forEach((file) => {
@@ -365,6 +373,11 @@ export const OrdersPage = () => {
   };
 
   const handleDocumentUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      event.target.value = '';
+      return;
+    }
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     files.forEach((file) => {
@@ -387,10 +400,18 @@ export const OrdersPage = () => {
   };
 
   const handleRemovePendingDocument = (index: number) => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     setUploadedDocuments((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleDeleteExistingDocument = (mediaId?: string) => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     if (!mediaId) {
       toast.error('Unable to delete this file');
       return;
@@ -404,6 +425,10 @@ export const OrdersPage = () => {
   };
 
   const handleUploadDocument = () => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     if (!jobCardModal.order?._id) {
       toast.error('Open an order before uploading documents');
       return;
@@ -416,10 +441,18 @@ export const OrdersPage = () => {
   };
 
   const removeFollowUpAttachment = (index: number) => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     setFollowUpAttachments((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleStatusUpdate = () => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     if (!jobCardModal.order?._id || !jobStatusChoice) return;
     if (isFollowUpSelected) {
       if (!followUpReason.trim()) {
@@ -441,6 +474,10 @@ export const OrdersPage = () => {
   };
 
   const handlePaymentStatusUpdate = () => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
     if (!jobCardModal.order?._id || !paymentStatusChoice) return;
     if (!jobCard) {
       toast.error('Generate a job card before updating payment status');
@@ -572,14 +609,28 @@ export const OrdersPage = () => {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to update payment status')
   });
 
+  const activityNoteMutation = useMutation({
+    mutationFn: ({ orderId, message }: { orderId: string; message: string }) => OrdersAPI.addHistoryNote(orderId, { message }),
+    onSuccess: (data, variables) => {
+      toast.success('Activity note added');
+      setActivityNote('');
+      queryClient.setQueryData(['order-jobcard', variables.orderId], data);
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to record note')
+  });
+
   const statusActionDisabled =
     !jobCardModal.order?._id ||
     !jobStatusChoice ||
     statusMutation.isPending ||
-    (isFollowUpSelected && (!followUpReason.trim() || followUpAttachments.length === 0));
+    (isFollowUpSelected && (!followUpReason.trim() || followUpAttachments.length === 0)) ||
+    isOrderCompleted;
 
   const paymentStatusActionDisabled =
-    !jobCardModal.order?._id || !jobCard || !paymentStatusChoice || paymentStatusMutation.isPending;
+    !jobCardModal.order?._id || !jobCard || !paymentStatusChoice || paymentStatusMutation.isPending || isOrderCompleted;
+
+  const activityNoteActionDisabled =
+    !jobCardModal.order?._id || !activityNote.trim() || activityNoteMutation.isPending || isOrderCompleted;
 
   return (
     <div className="space-y-6">
@@ -929,6 +980,12 @@ export const OrdersPage = () => {
               </div>
             </div>
 
+            {isOrderCompleted && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
+                Job marked as completed. Chat, uploads, and status changes are locked for audit safety.
+              </div>
+            )}
+
             {!jobCard && (
               <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-800">
                 No job card has been created for this order yet. Once the technician starts work, their updates will appear here.
@@ -949,8 +1006,10 @@ export const OrdersPage = () => {
 
                 <div className="rounded-2xl border border-slate-100 p-4">
                   <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Documents & Photos</p>
-                  <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center text-sm text-slate-500 hover:border-slate-400">
-                    <input type="file" className="hidden" multiple onChange={handleDocumentUpload} />
+                  <label
+                    className={`mt-3 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition ${isOrderCompleted ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400' : 'cursor-pointer border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'}`}
+                  >
+                    <input type="file" className="hidden" multiple onChange={handleDocumentUpload} disabled={isOrderCompleted} />
                     <span className="font-semibold text-slate-900">Drag & drop files</span>
                     <span className="text-xs text-slate-500">or click to browse</span>
                   </label>
@@ -974,8 +1033,12 @@ export const OrdersPage = () => {
                                   variant="ghost"
                                   className="text-xs text-rose-600 hover:text-rose-700"
                                   onClick={() => handleDeleteExistingDocument(doc._id)}
-                                  disabled={!doc._id || (deleteDocumentMutation.isPending && deletingMediaId !== doc._id)}
-                                  loading={deleteDocumentMutation.isPending && deletingMediaId === doc._id}
+                                  disabled={
+                                    isOrderCompleted ||
+                                    !doc._id ||
+                                    (deleteDocumentMutation.isPending && deletingMediaId !== doc._id)
+                                  }
+                                  loading={!isOrderCompleted && deleteDocumentMutation.isPending && deletingMediaId === doc._id}
                                 >
                                   Delete
                                 </Button>
@@ -1002,6 +1065,7 @@ export const OrdersPage = () => {
                                   type="button"
                                   className="text-xs font-semibold text-slate-500 hover:text-slate-900"
                                   onClick={() => handleRemovePendingDocument(idx)}
+                                  disabled={isOrderCompleted}
                                 >
                                   Remove
                                 </button>
@@ -1012,8 +1076,10 @@ export const OrdersPage = () => {
                             type="button"
                             onClick={handleUploadDocument}
                             className="mt-4 w-full"
-                            disabled={!uploadedDocuments.length || uploadDocumentsMutation.isPending}
-                            loading={uploadDocumentsMutation.isPending}
+                            disabled={
+                              isOrderCompleted || !uploadedDocuments.length || uploadDocumentsMutation.isPending
+                            }
+                            loading={!isOrderCompleted && uploadDocumentsMutation.isPending}
                           >
                             {`Upload ${uploadedDocuments.length} Document${uploadedDocuments.length > 1 ? 's' : ''}`}
                           </Button>
@@ -1082,6 +1148,45 @@ export const OrdersPage = () => {
                       ))}
                     </ol>
                   )}
+                  <form
+                    className="mt-4 space-y-3 rounded-2xl bg-slate-50/80 p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (isOrderCompleted) {
+                        toast.error('Completed job cards are view-only');
+                        return;
+                      }
+                      if (!jobCardModal.order?._id) {
+                        toast.error('Open an order before logging activity');
+                        return;
+                      }
+                      const note = activityNote.trim();
+                      if (!note) return;
+                      activityNoteMutation.mutate({ orderId: jobCardModal.order._id, message: note });
+                    }}
+                  >
+                    <TextArea
+                      label="Add a quick note"
+                      placeholder="Share updates for finance, dispatch, or technicians"
+                      value={activityNote}
+                      onChange={(event) => setActivityNote(event.target.value)}
+                      rows={3}
+                      disabled={isOrderCompleted}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-[11px] text-slate-500">
+                        {isOrderCompleted ? 'Job completed · notes locked.' : 'Notes sync to the order history instantly.'}
+                      </p>
+                      <Button
+                        type="submit"
+                        className="w-full sm:w-auto"
+                        disabled={activityNoteActionDisabled}
+                        loading={!isOrderCompleted && activityNoteMutation.isPending}
+                      >
+                        Send update
+                      </Button>
+                    </div>
+                  </form>
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">
@@ -1107,7 +1212,7 @@ export const OrdersPage = () => {
                   <div className="mt-3 space-y-5">
                     <div className="space-y-3">
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Job progress</p>
-                      <Select value={jobStatusChoice} onChange={(event) => setJobStatusChoice(event.target.value)}>
+                      <Select value={jobStatusChoice} onChange={(event) => setJobStatusChoice(event.target.value)} disabled={isOrderCompleted}>
                         <option value="">Select status</option>
                         {jobStatusOptions.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -1115,7 +1220,12 @@ export const OrdersPage = () => {
                           </option>
                         ))}
                       </Select>
-                      <Button type="button" onClick={handleStatusUpdate} disabled={statusActionDisabled} loading={statusMutation.isPending}>
+                      <Button
+                        type="button"
+                        onClick={handleStatusUpdate}
+                        disabled={statusActionDisabled}
+                        loading={!isOrderCompleted && statusMutation.isPending}
+                      >
                         Update job status
                       </Button>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -1131,6 +1241,7 @@ export const OrdersPage = () => {
                           <Select
                             value={paymentStatusChoice}
                             onChange={(event) => setPaymentStatusChoice(event.target.value as PaymentStatusValue | '')}
+                            disabled={isOrderCompleted}
                           >
                             <option value="">Select payment status</option>
                             {paymentStatusOptions.map((option) => (
@@ -1143,7 +1254,7 @@ export const OrdersPage = () => {
                             type="button"
                             onClick={handlePaymentStatusUpdate}
                             disabled={paymentStatusActionDisabled}
-                            loading={paymentStatusMutation.isPending}
+                            loading={!isOrderCompleted && paymentStatusMutation.isPending}
                           >
                             Update payment status
                           </Button>
@@ -1166,6 +1277,7 @@ export const OrdersPage = () => {
                         placeholder="Explain why further follow up is required"
                         value={followUpReason}
                         onChange={(event) => setFollowUpReason(event.target.value)}
+                        disabled={isOrderCompleted}
                       />
                       <Input
                         type="file"
@@ -1173,6 +1285,7 @@ export const OrdersPage = () => {
                         multiple
                         label="Attach evidence (images/videos)"
                         onChange={handleFollowUpFiles}
+                        disabled={isOrderCompleted}
                       />
                       {followUpAttachments.length > 0 && (
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -1183,6 +1296,7 @@ export const OrdersPage = () => {
                                 className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600"
                                 onClick={() => removeFollowUpAttachment(idx)}
                                 aria-label="Remove attachment"
+                                disabled={isOrderCompleted}
                               >
                                 ×
                               </button>

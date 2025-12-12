@@ -148,3 +148,8 @@ export const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
   const payload = await AdminService.updateJobPaymentStatus(req.params.orderId, req.body.status, req.user.id);
   return successResponse(res, { data: payload, message: 'Payment status updated successfully' });
 });
+
+export const addOrderHistoryNote = asyncHandler(async (req, res) => {
+  const payload = await AdminService.addOrderHistoryNote(req.params.orderId, req.body.message, req.user.id);
+  return successResponse(res, { data: payload, message: 'Activity note recorded' });
+});
