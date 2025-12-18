@@ -168,9 +168,10 @@ export const AdminService = {
   },
 
   async getOrdersForAdmin(filters = {}) {
-    const { status } = filters;
+    const { status, customerId } = filters;
     const query = {};
     if (status) query.status = status;
+    if (customerId) query.customerUser = customerId;
     return Order.find(query)
       .populate('serviceCategory serviceItem assignedTechnician', 'name')
       .sort({ createdAt: -1 });
@@ -282,6 +283,100 @@ export const AdminService = {
     };
   },
 
+  async updateCustomerAddress(customerId, payload) {
+    const user = await User.findById(customerId);
+    if (!user) {
+      throw new ApiError(404, 'Customer not found');
+    }
+
+    if (payload.addressId) {
+      // Update existing address
+      const address = await CustomerAddress.findOne({ _id: payload.addressId, customer: customerId });
+      if (!address) {
+        throw new ApiError(404, 'Address not found');
+      }
+      
+      address.line1 = payload.line1;
+      address.line2 = payload.line2 || '';
+      address.city = payload.city;
+      address.state = payload.state;
+      address.postalCode = payload.postalCode || '';
+      await address.save();
+    } else {
+      // Create new address
+      await CustomerAddress.create({
+        customer: customerId,
+        contactName: user.name,
+        phone: user.mobile,
+        line1: payload.line1,
+        line2: payload.line2,
+        city: payload.city,
+        state: payload.state,
+        postalCode: payload.postalCode,
+        isDefault: false
+      });
+    }
+
+    return this.findCustomerByPhone(user.mobile);
+  },
+
+  async updateCustomerAddress(customerId, addressData) {
+    const user = await User.findById(customerId);
+    if (!user) {
+      throw new ApiError(404, 'Customer not found');
+    }
+
+    // Find default address or create new one
+    let address = await CustomerAddress.findOne({ customer: customerId, isDefault: true });
+    
+    if (address) {
+      // Update existing default address
+      address.line1 = addressData.line1;
+      address.line2 = addressData.line2 || '';
+      address.city = addressData.city;
+      address.state = addressData.state;
+      address.postalCode = addressData.postalCode || '';
+      await address.save();
+    } else {
+      // Create new default address
+      address = await CustomerAddress.create({
+        customer: customerId,
+        contactName: user.name,
+        phone: user.mobile,
+        line1: addressData.line1,
+        line2: addressData.line2,
+        city: addressData.city,
+        state: addressData.state,
+        postalCode: addressData.postalCode,
+        isDefault: true
+      });
+    }
+
+    // Return customer summary with updated address
+    const addresses = await CustomerAddress.find({ customer: customerId });
+    return {
+      id: String(user._id),
+      name: user.name,
+      email: user.email,
+      phone: user.mobile,
+      addressLine1: address.line1,
+      addressLine2: address.line2,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      addresses: addresses.map(addr => ({
+        id: String(addr._id),
+        label: addr.label || 'Address',
+        line1: addr.line1,
+        line2: addr.line2,
+        city: addr.city,
+        state: addr.state,
+        postalCode: addr.postalCode,
+        isDefault: addr.isDefault
+      }))
+    };
+  },
+
   async createOrderFromAdmin(payload, adminId) {
     const [serviceItem, customer] = await Promise.all([
       ServiceItem.findById(payload.serviceItem).populate('category'),
@@ -378,7 +473,7 @@ export const AdminService = {
       throw new ApiError(404, 'Order not found');
     }
 
-    const profiles = await TechnicianProfile.find({ serviceItems: order.serviceItem })
+    const profiles = await TechnicianProfile.find()
       .populate('user', 'name email mobile status')
       .populate('serviceItems', 'name')
       .populate('skills', 'name')

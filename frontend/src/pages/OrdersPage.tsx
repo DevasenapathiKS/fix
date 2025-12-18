@@ -163,6 +163,16 @@ export const OrdersPage = () => {
   // Additional service form state
   const [showAddService, setShowAddService] = useState(false);
   const [selectedAdditionalServiceId, setSelectedAdditionalServiceId] = useState('');
+  
+  // Edit customer address state
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [selectedEditAddressId, setSelectedEditAddressId] = useState('');
+  const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+  const [editAddressLine1, setEditAddressLine1] = useState('');
+  const [editAddressLine2, setEditAddressLine2] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editPostalCode, setEditPostalCode] = useState('');
   const [additionalServiceQuantity, setAdditionalServiceQuantity] = useState('1');
   
   const queryClient = useQueryClient();
@@ -794,6 +804,21 @@ export const OrdersPage = () => {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to remove service')
   });
 
+  const updateCustomerAddressMutation = useMutation({
+    mutationFn: ({ customerId, addressId, address }: { customerId: string; addressId?: string; address: { line1: string; line2?: string; city: string; state: string; postalCode?: string } }) =>
+      CustomersAPI.updateAddress(customerId, { ...address, addressId }),
+    onSuccess: (variables) => {
+      toast.success(variables.addressId ? 'Order address updated' : 'New address added successfully');
+      setEditingAddress(false);
+      setIsAddingNewAddress(false);
+      setSelectedEditAddressId('');
+      if (jobCardModal.order?._id) {
+        queryClient.invalidateQueries({ queryKey: ['order-jobcard', jobCardModal.order._id] });
+      }
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to update address')
+  });
+
   const checkCustomerMutation = useMutation({
     mutationFn: (phone: string) => CustomersAPI.findByPhone(phone),
     onSuccess: (data) => {
@@ -1330,13 +1355,188 @@ export const OrdersPage = () => {
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="space-y-6">
                 <div className="rounded-2xl border border-slate-100 p-4">
-                  <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Customer & Property</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Customer & Property</p>
+                    {!isOrderCompleted && !editingAddress && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAddress(true);
+                          setIsAddingNewAddress(false);
+                          setSelectedEditAddressId('');
+                          setEditAddressLine1('');
+                          setEditAddressLine2('');
+                          setEditCity('');
+                          setEditState('');
+                          setEditPostalCode('');
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Change Address
+                      </button>
+                    )}
+                  </div>
                   <h4 className="mt-2 text-lg font-semibold text-slate-900">{jobCardDetail.order.customer.name}</h4>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.phone}</p>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.email || 'Email not provided'}</p>
-                  <div className="mt-3 text-xs text-slate-500">
-                    <p>{buildAddress(jobCardDetail.order.customer) || 'Address not provided'}</p>
-                  </div>
+                  
+                  {editingAddress ? (
+                    <div className="mt-3 space-y-3">
+                      {customerData?.addresses && customerData.addresses.length > 0 && !isAddingNewAddress ? (
+                        <>
+                          <Select
+                            label="Select Address"
+                            value={selectedEditAddressId}
+                            onChange={(e) => {
+                              const addressId = e.target.value;
+                              setSelectedEditAddressId(addressId);
+                              const address = customerData.addresses?.find(a => a.id === addressId);
+                              if (address) {
+                                setEditAddressLine1(address.line1 || '');
+                                setEditAddressLine2(address.line2 || '');
+                                setEditCity(address.city || '');
+                                setEditState(address.state || '');
+                                setEditPostalCode(address.postalCode || '');
+                              }
+                            }}
+                          >
+                            <option value="">Choose an existing address</option>
+                            {customerData.addresses.map((addr) => (
+                              <option key={addr.id} value={addr.id}>
+                                {addr.label || 'Address'} - {addr.line1}, {addr.city} {addr.isDefault ? '(Default)' : ''}
+                              </option>
+                            ))}
+                          </Select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddingNewAddress(true);
+                              setSelectedEditAddressId('');
+                              setEditAddressLine1('');
+                              setEditAddressLine2('');
+                              setEditCity('');
+                              setEditState('');
+                              setEditPostalCode('');
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            + Add New Address
+                          </button>
+                        </>
+                      ) : null}
+                      
+                      {(isAddingNewAddress || !customerData?.addresses?.length || selectedEditAddressId) && (
+                        <>
+                          {isAddingNewAddress && customerData?.addresses && customerData.addresses.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAddingNewAddress(false);
+                                setEditAddressLine1('');
+                                setEditAddressLine2('');
+                                setEditCity('');
+                                setEditState('');
+                                setEditPostalCode('');
+                              }}
+                              className="text-xs text-slate-600 hover:text-slate-700"
+                            >
+                              ← Back to address list
+                            </button>
+                          )}
+                          <Input
+                            label="Address Line 1 *"
+                            value={editAddressLine1}
+                            onChange={(e) => setEditAddressLine1(e.target.value)}
+                            placeholder="Street address"
+                          />
+                          <Input
+                            label="Address Line 2"
+                            value={editAddressLine2}
+                            onChange={(e) => setEditAddressLine2(e.target.value)}
+                            placeholder="Apartment, suite, etc."
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              label="City *"
+                              value={editCity}
+                              onChange={(e) => setEditCity(e.target.value)}
+                              placeholder="City"
+                            />
+                            <Input
+                              label="State *"
+                              value={editState}
+                              onChange={(e) => setEditState(e.target.value)}
+                              placeholder="State"
+                            />
+                          </div>
+                          <Input
+                            label="Postal Code"
+                            value={editPostalCode}
+                            onChange={(e) => setEditPostalCode(e.target.value)}
+                            placeholder="PIN Code"
+                          />
+                        </>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (!selectedEditAddressId && !isAddingNewAddress && customerData?.addresses?.length) {
+                              toast.error('Please select an address or add a new one');
+                              return;
+                            }
+                            if (!editAddressLine1.trim() || !editCity.trim() || !editState.trim()) {
+                              toast.error('Please fill required address fields');
+                              return;
+                            }
+                            const customerId = typeof jobCardDetail.order.customer === 'string' 
+                              ? jobCardDetail.order.customer 
+                              : jobCardDetail.order.customer._id || jobCardDetail.order.customer._id;
+                            
+                            if (!customerId) {
+                              toast.error('Customer ID not found');
+                              return;
+                            }
+                            
+                            updateCustomerAddressMutation.mutate({
+                              customerId,
+                              addressId: selectedEditAddressId || undefined,
+                              address: {
+                                line1: editAddressLine1,
+                                line2: editAddressLine2,
+                                city: editCity,
+                                state: editState,
+                                postalCode: editPostalCode
+                              }
+                            });
+                          }}
+                          loading={updateCustomerAddressMutation.isPending}
+                          disabled={updateCustomerAddressMutation.isPending}
+                          className="flex-1"
+                        >
+                          {isAddingNewAddress ? 'Add Address' : selectedEditAddressId ? 'Update Order Address' : 'Save'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setEditingAddress(false);
+                            setIsAddingNewAddress(false);
+                            setSelectedEditAddressId('');
+                          }}
+                          disabled={updateCustomerAddressMutation.isPending}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-xs text-slate-500">
+                      <p>{buildAddress(jobCardDetail.order.customer) || 'Address not provided'}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">

@@ -13,6 +13,7 @@ export interface AuthUser {
 }
 
 export interface CustomerSummary {
+  [x: string]: any;
   id: string;
   name: string;
   email?: string;
@@ -208,6 +209,7 @@ export interface JobCardDetail {
     id: string;
     code?: string;
     customer: {
+      _id: any;
       name: string;
       phone: string;
       addressLine1?: string;
@@ -252,6 +254,7 @@ export interface OrderFilters {
   status?: string;
   fromDate?: string;
   toDate?: string;
+  customerId?: string;
 }
 
 export interface ServiceCategory {

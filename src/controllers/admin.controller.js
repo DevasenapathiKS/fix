@@ -104,6 +104,11 @@ export const createCustomer = asyncHandler(async (req, res) => {
   return successResponse(res, { status: 201, data: customer, message: 'Customer created successfully' });
 });
 
+export const updateCustomerAddress = asyncHandler(async (req, res) => {
+  const customer = await AdminService.updateCustomerAddress(req.params.customerId, req.body);
+  return successResponse(res, { data: customer, message: 'Address updated successfully' });
+});
+
 export const createOrderFromAdmin = asyncHandler(async (req, res) => {
   const order = await AdminService.createOrderFromAdmin(req.body, req.user.id);
   return successResponse(res, { status: 201, data: order, message: 'Order created successfully' });

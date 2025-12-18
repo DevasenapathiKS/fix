@@ -35,6 +35,7 @@ import {
   listCustomers,
   findCustomerByPhone,
   createCustomer,
+  updateCustomerAddress,
   createOrderFromAdmin
 } from '../controllers/admin.controller.js';
 import { authenticate, allowAdminOnly } from '../middlewares/auth.middleware.js';
@@ -229,6 +230,19 @@ router.post(
     body('address.postalCode').optional().notEmpty()
   ]),
   createCustomer
+);
+router.put(
+  '/customers/:customerId/address',
+  validate([
+    param('customerId').isMongoId(),
+    body('addressId').optional().isMongoId(),
+    body('line1').notEmpty().withMessage('Address line 1 is required'),
+    body('line2').optional(),
+    body('city').notEmpty().withMessage('City is required'),
+    body('state').notEmpty().withMessage('State is required'),
+    body('postalCode').optional()
+  ]),
+  updateCustomerAddress
 );
 
 router.post(

@@ -162,5 +162,7 @@ export const TimeSlotsAPI = {
 export const CustomersAPI = {
   list: () => extract<CustomerSummary[]>(apiClient.get<ApiSuccess<CustomerSummary[]>>('/admin/customers')),
   findByPhone: (phone: string) => extract<CustomerSummary | null>(apiClient.get<ApiSuccess<CustomerSummary | null>>(`/admin/customers/phone/${phone}`)),
-  create: (payload: any) => extract<CustomerSummary>(apiClient.post<ApiSuccess<CustomerSummary>>('/admin/customers', payload))
+  create: (payload: any) => extract<CustomerSummary>(apiClient.post<ApiSuccess<CustomerSummary>>('/admin/customers', payload)),
+  updateAddress: (customerId: string, payload: { line1: string; line2?: string; city: string; state: string; postalCode?: string; addressId?: string }) =>
+    extract<CustomerSummary>(apiClient.put<ApiSuccess<CustomerSummary>>(`/admin/customers/${customerId}/address`, payload))
 };
