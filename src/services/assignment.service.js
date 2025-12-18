@@ -56,7 +56,7 @@ export const AssignmentService = {
 
     await JobCard.findOneAndUpdate(
       { order: order._id },
-      { order: order._id, technician: technicianId, status: JOB_STATUS.OPEN },
+      { order: order._id, technician: technicianId, status: JOB_STATUS.OPEN, estimateAmount: order.estimatedCost },
       { upsert: true, new: true }
     );
 

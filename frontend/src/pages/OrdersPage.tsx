@@ -1,7 +1,8 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { OrdersAPI, TechniciansAPI, TimeSlotsAPI, CustomersAPI, CatalogAPI } from '../services/adminApi';
+import { OrdersAPI, TechniciansAPI, TimeSlotsAPI, CustomersAPI, CatalogAPI, SparePartsAPI } from '../services/adminApi';
 import type {
   JobCardDetail,
   Order,
@@ -12,7 +13,8 @@ import type {
   FollowUpAttachment,
   CustomerSummary,
   ServiceCategory,
-  ServiceItem
+  ServiceItem,
+  SparePart
 } from '../types';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -22,7 +24,7 @@ import { Select } from '../components/ui/Select';
 import { TextArea } from '../components/ui/TextArea';
 import { Modal } from '../components/ui/Modal';
 import { Drawer } from '../components/ui/Drawer';
-import { CalendarDaysIcon, CheckCircleIcon, PrinterIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, CheckCircleIcon, PrinterIcon, TrashIcon, XCircleIcon, XMarkIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDateTime } from '../utils/format';
 
@@ -114,6 +116,8 @@ export const OrdersPage = () => {
   const [assignModal, setAssignModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [rescheduleModal, setRescheduleModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [jobCardModal, setJobCardModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
+  const [imageViewer, setImageViewer] = useState<{ open: boolean; url: string; name: string }>({ open: false, url: '', name: '' });
+  const [imageZoom, setImageZoom] = useState(100);
   const [assigningTech, setAssigningTech] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
@@ -150,6 +154,17 @@ export const OrdersPage = () => {
   const [uploadedDocuments, setUploadedDocuments] = useState<FollowUpAttachment[]>([]);
   const [activityNote, setActivityNote] = useState('');
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+  
+  // Spare parts form state
+  const [showAddSparePart, setShowAddSparePart] = useState(false);
+  const [selectedSparePartId, setSelectedSparePartId] = useState('');
+  const [sparePartQuantity, setSparePartQuantity] = useState('');
+  
+  // Additional service form state
+  const [showAddService, setShowAddService] = useState(false);
+  const [selectedAdditionalServiceId, setSelectedAdditionalServiceId] = useState('');
+  const [additionalServiceQuantity, setAdditionalServiceQuantity] = useState('1');
+  
   const queryClient = useQueryClient();
 
   const closeAssignModal = () => {
@@ -185,6 +200,18 @@ export const OrdersPage = () => {
     queryKey: ['service-items', selectedCategory],
     queryFn: () => CatalogAPI.serviceItems(selectedCategory || undefined),
     enabled: createOrderModal && Boolean(selectedCategory)
+  });
+
+  const { data: allSpareparts = [] } = useQuery<SparePart[]>({
+    queryKey: ['spare-parts'],
+    queryFn: SparePartsAPI.list,
+    enabled: jobCardModal.open
+  });
+
+  const { data: allServiceItems = [] } = useQuery<ServiceItem[]>({
+    queryKey: ['all-service-items'],
+    queryFn: () => CatalogAPI.serviceItems(),
+    enabled: jobCardModal.open
   });
 
   const { data: candidates = [], isFetching: loadingCandidates } = useQuery<TechnicianCandidate[]>({
@@ -230,7 +257,11 @@ export const OrdersPage = () => {
   const serviceItemInfo = jobCardDetail?.order?.serviceItem;
   const serviceBasePrice = typeof serviceItemInfo === 'string' ? 0 : serviceItemInfo?.basePrice ?? 0;
   const servicePrice = jobCard?.estimateAmount ?? jobCardDetail?.order?.estimatedCost ?? serviceBasePrice;
+  const extraWorks = jobCard?.extraWork ?? [];
+  const extraWorksSubtotal = extraWorks.reduce((sum, work) => sum + (work?.amount ?? 0), 0);
   useEffect(() => {
+    console.log('Job Card Detail:', jobCardDetail);
+    console.log('Job Card:', jobCard);
     const nextStatus = jobCardDetail?.order?.status;
     if (nextStatus && jobStatusValues.includes(nextStatus)) {
       setJobStatusChoice(nextStatus);
@@ -521,6 +552,69 @@ export const OrdersPage = () => {
     paymentStatusMutation.mutate({ orderId: jobCardModal.order._id, status: paymentStatusChoice });
   };
 
+  const handleAddSparePart = () => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
+    if (!jobCardModal.order?._id) {
+      toast.error('Open an order before adding spare parts');
+      return;
+    }
+    if (!selectedSparePartId || !sparePartQuantity) {
+      toast.error('Please select a spare part and enter quantity');
+      return;
+    }
+    const quantity = parseFloat(sparePartQuantity);
+    if (isNaN(quantity) || quantity <= 0) {
+      toast.error('Quantity must be a positive number');
+      return;
+    }
+    const selectedPart = allSpareparts.find(p => p._id === selectedSparePartId);
+    if (!selectedPart) {
+      toast.error('Selected spare part not found');
+      return;
+    }
+    addSparePartMutation.mutate({
+      orderId: jobCardModal.order._id,
+      sparePart: { sparePartId: selectedSparePartId, quantity, unitPrice: selectedPart.unitPrice }
+    });
+  };
+
+  const handleAddAdditionalService = () => {
+    if (isOrderCompleted) {
+      toast.error('Completed job cards are view-only');
+      return;
+    }
+    if (!jobCardModal.order?._id) {
+      toast.error('Open an order before adding services');
+      return;
+    }
+    if (!selectedAdditionalServiceId || !additionalServiceQuantity) {
+      toast.error('Please select a service and enter quantity');
+      return;
+    }
+    const quantity = parseFloat(additionalServiceQuantity);
+    if (isNaN(quantity) || quantity <= 0) {
+      toast.error('Quantity must be a positive number');
+      return;
+    }
+    const selectedService = allServiceItems.find(s => s._id === selectedAdditionalServiceId);
+    if (!selectedService) {
+      toast.error('Selected service not found');
+      return;
+    }
+    const totalAmount = (selectedService.basePrice || 0) * quantity;
+    addAdditionalServiceMutation.mutate({
+      orderId: jobCardModal.order._id,
+      service: { 
+        description: `${selectedService.name} (x${quantity})`, 
+        amount: totalAmount,
+        serviceItemId: selectedAdditionalServiceId
+      }
+    });
+  };
+
 
   useEffect(() => {
     if (rescheduleModal.open && rescheduleModal.order) {
@@ -652,6 +746,52 @@ export const OrdersPage = () => {
       queryClient.setQueryData(['order-jobcard', variables.orderId], data);
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to record note')
+  });
+
+  const addSparePartMutation = useMutation({
+    mutationFn: ({ orderId, sparePart }: { orderId: string; sparePart: { sparePartId: string; quantity: number; unitPrice: number } }) =>
+      OrdersAPI.addSparePart(orderId, sparePart),
+    onSuccess: (data, variables) => {
+      toast.success('Spare part added');
+      setSelectedSparePartId('');
+      setSparePartQuantity('');
+      setShowAddSparePart(false);
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to add spare part')
+  });
+
+  const addAdditionalServiceMutation = useMutation({
+    mutationFn: ({ orderId, service }: { orderId: string; service: { description: string; amount: number; serviceItemId?: string } }) =>
+      OrdersAPI.addAdditionalService(orderId, service),
+    onSuccess: (data, variables) => {
+      toast.success('Additional service added');
+      setSelectedAdditionalServiceId('');
+      setAdditionalServiceQuantity('1');
+      setShowAddService(false);
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to add service')
+  });
+
+  const removeSparePartMutation = useMutation({
+    mutationFn: ({ orderId, index }: { orderId: string; index: number }) =>
+      OrdersAPI.removeSparePart(orderId, index),
+    onSuccess: (data, variables) => {
+      toast.success('Spare part removed');
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to remove spare part')
+  });
+
+  const removeAdditionalServiceMutation = useMutation({
+    mutationFn: ({ orderId, index }: { orderId: string; index: number }) =>
+      OrdersAPI.removeAdditionalService(orderId, index),
+    onSuccess: (data, variables) => {
+      toast.success('Additional service removed');
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to remove service')
   });
 
   const checkCustomerMutation = useMutation({
@@ -1213,60 +1353,122 @@ export const OrdersPage = () => {
                       {existingDocuments.length > 0 && (
                         <div>
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Stored files</p>
-                          <ul className="mt-2 space-y-3">
+                          <div className="mt-2 grid grid-cols-2 gap-3">
                             {existingDocuments.map((doc, idx) => (
-                              <li
+                              <div
                                 key={doc._id ?? `${doc.url}-${idx}`}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white/70 p-3"
+                                className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
                               >
-                                <div className="min-w-0">
-                                  <p className="font-medium text-slate-900 truncate">{doc.name || `Document ${idx + 1}`}</p>
-                                  <p className="text-xs text-slate-500">{humanize(doc.kind) || 'File'}</p>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  className="text-xs text-rose-600 hover:text-rose-700"
-                                  onClick={() => handleDeleteExistingDocument(doc._id)}
-                                  disabled={
-                                    isOrderCompleted ||
-                                    !doc._id ||
-                                    (deleteDocumentMutation.isPending && deletingMediaId !== doc._id)
-                                  }
-                                  loading={!isOrderCompleted && deleteDocumentMutation.isPending && deletingMediaId === doc._id}
-                                >
-                                  Delete
-                                </Button>
-                              </li>
+                                {doc.kind === 'image' ? (
+                                  <div 
+                                    className="aspect-square cursor-pointer"
+                                    onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
+                                  >
+                                    <img
+                                      src={doc.url}
+                                      alt={doc.name || `Image ${idx + 1}`}
+                                      className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                    />
+                                  </div>
+                                ) : doc.kind === 'video' ? (
+                                  <div className="aspect-square bg-slate-900">
+                                    <video
+                                      src={doc.url}
+                                      className="w-full h-full object-cover"
+                                      controls
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="aspect-square flex flex-col items-center justify-center bg-slate-50 p-3">
+                                    <svg className="w-12 h-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    <p className="mt-2 text-xs text-slate-600 text-center truncate w-full px-2">{doc.name || 'Document'}</p>
+                                  </div>
+                                )}
+                                {!isOrderCompleted && (
+                                  <button
+                                    type="button"
+                                    className="absolute top-2 right-2 p-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteExistingDocument(doc._id);
+                                    }}
+                                    disabled={
+                                      !doc._id ||
+                                      (deleteDocumentMutation.isPending && deletingMediaId !== doc._id)
+                                    }
+                                    title="Delete"
+                                  >
+                                    {deleteDocumentMutation.isPending && deletingMediaId === doc._id ? (
+                                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                    ) : (
+                                      <XMarkIcon className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       )}
 
                       {uploadedDocuments.length > 0 && (
                         <div>
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Pending upload</p>
-                          <ul className="mt-2 space-y-3">
+                          <div className="mt-2 grid grid-cols-2 gap-3">
                             {uploadedDocuments.map((doc, idx) => (
-                              <li
+                              <div
                                 key={`${doc.url}-${idx}`}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3"
+                                className="relative rounded-xl border border-dashed border-slate-200 bg-slate-50 overflow-hidden group"
                               >
-                                <div className="min-w-0">
-                                  <p className="font-medium text-slate-900 truncate">{doc.name || `Pending file ${idx + 1}`}</p>
-                                  <p className="text-xs text-slate-500">{humanize(doc.kind) || 'File'}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="text-xs font-semibold text-slate-500 hover:text-slate-900"
-                                  onClick={() => handleRemovePendingDocument(idx)}
-                                  disabled={isOrderCompleted}
-                                >
-                                  Remove
-                                </button>
-                              </li>
+                                {doc.kind === 'image' ? (
+                                  <div 
+                                    className="aspect-square cursor-pointer"
+                                    onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
+                                  >
+                                    <img
+                                      src={doc.url}
+                                      alt={doc.name || `Image ${idx + 1}`}
+                                      className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                    />
+                                  </div>
+                                ) : doc.kind === 'video' ? (
+                                  <div className="aspect-square bg-slate-900">
+                                    <video
+                                      src={doc.url}
+                                      className="w-full h-full object-cover"
+                                      controls
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="aspect-square flex flex-col items-center justify-center bg-slate-50 p-3">
+                                    <svg className="w-12 h-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    <p className="mt-2 text-xs text-slate-600 text-center truncate w-full px-2">{doc.name || 'Document'}</p>
+                                  </div>
+                                )}
+                                {!isOrderCompleted && (
+                                  <button
+                                    type="button"
+                                    className="absolute top-2 right-2 p-1 rounded-full bg-slate-700 hover:bg-slate-800 text-white shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemovePendingDocument(idx);
+                                    }}
+                                    disabled={isOrderCompleted}
+                                    title="Remove"
+                                  >
+                                    <XMarkIcon className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                           <Button
                             type="button"
                             onClick={handleUploadDocument}
@@ -1305,26 +1507,94 @@ export const OrdersPage = () => {
                       ? jobCardDetail.order.serviceItem.description || jobCardDetail.order.issueDescription || 'No description provided.'
                       : jobCardDetail.order.issueDescription || 'No description provided.'}
                   </p>
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Service price</p>
-                    <p className="text-2xl font-semibold text-slate-900">{formatCurrency(servicePrice)}</p>
-                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">
-                  <h4 className="text-sm font-semibold text-slate-900">Additional Services</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Additional Services</h4>
+                    {!isOrderCompleted && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => setShowAddService(!showAddService)}
+                        className="text-xs"
+                      >
+                        {showAddService ? 'Cancel' : '+ Add Service'}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {showAddService && (
+                    <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <Select
+                        label="Select Service *"
+                        value={selectedAdditionalServiceId}
+                        onChange={(e) => setSelectedAdditionalServiceId(e.target.value)}
+                      >
+                        <option value="">Choose a service...</option>
+                        {allServiceItems.map((service) => (
+                          <option key={service._id} value={service._id}>
+                            {service.name} - {formatCurrency(service.basePrice || 0)}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        placeholder="1"
+                        value={additionalServiceQuantity}
+                        onChange={(e) => setAdditionalServiceQuantity(e.target.value)}
+                        min="1"
+                        step="1"
+                      />
+                      {selectedAdditionalServiceId && (
+                        <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
+                          <span className="font-semibold">Total: </span>
+                          {formatCurrency(
+                            (allServiceItems.find(s => s._id === selectedAdditionalServiceId)?.basePrice || 0) * 
+                            parseFloat(additionalServiceQuantity || '1')
+                          )}
+                        </div>
+                      )}
+                      <Button
+                        onClick={handleAddAdditionalService}
+                        loading={addAdditionalServiceMutation.isPending}
+                        className="w-full"
+                      >
+                        Add Service
+                      </Button>
+                    </div>
+                  )}
+                  
                   {jobCard?.extraWork && jobCard.extraWork.length > 0 ? (
                     <ul className="mt-3 space-y-2 text-sm">
                       {jobCard.extraWork.map((work, idx) => (
                         <li key={`${work.description}-${idx}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
                           <span className="text-slate-600">{work.description}</span>
-                          <span className="font-semibold text-slate-900">{formatCurrency(work.amount)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-900">{formatCurrency(work.amount)}</span>
+                            {!isOrderCompleted && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (jobCardModal.order?._id) {
+                                    removeAdditionalServiceMutation.mutate({ orderId: jobCardModal.order._id, index: idx });
+                                  }
+                                }}
+                                className="text-rose-500 hover:text-rose-700 transition-colors"
+                                disabled={removeAdditionalServiceMutation.isPending}
+                                title="Remove service"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
-                  ) : (
+                  ) : !showAddService ? (
                     <p className="mt-2 text-xs text-slate-500">No additional services captured yet.</p>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">
@@ -1474,33 +1744,72 @@ export const OrdersPage = () => {
                         onChange={(event) => setFollowUpReason(event.target.value)}
                         disabled={isOrderCompleted}
                       />
-                      <Input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        label="Attach evidence (images/videos)"
-                        onChange={handleFollowUpFiles}
-                        disabled={isOrderCompleted}
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Attach evidence (images/videos)
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          multiple
+                          onChange={handleFollowUpFiles}
+                          disabled={isOrderCompleted}
+                          className="hidden"
+                          id="followup-file-input"
+                        />
+                        <label
+                          htmlFor="followup-file-input"
+                          className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition cursor-pointer ${
+                            isOrderCompleted 
+                              ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed' 
+                              : 'border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'
+                          }`}
+                        >
+                          <span className="font-semibold text-slate-900">Drag & drop files</span>
+                          <span className="text-xs text-slate-500">or click to browse</span>
+                        </label>
+                      </div>
                       {followUpAttachments.length > 0 && (
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid grid-cols-2 gap-3">
                           {followUpAttachments.map((attachment, idx) => (
-                            <div key={`${attachment.name || 'attachment'}-${idx}`} className="relative rounded-xl border border-slate-100 p-3">
-                              <button
-                                type="button"
-                                className="absolute right-2 top-2 text-xs text-slate-400 hover:text-slate-600"
-                                onClick={() => removeFollowUpAttachment(idx)}
-                                aria-label="Remove attachment"
-                                disabled={isOrderCompleted}
-                              >
-                                ×
-                              </button>
+                            <div 
+                              key={`${attachment.name || 'attachment'}-${idx}`} 
+                              className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
+                            >
                               {attachment.kind === 'video' ? (
-                                <video controls className="h-32 w-full rounded-lg object-cover" src={attachment.url} />
+                                <div className="aspect-square bg-slate-900">
+                                  <video
+                                    src={attachment.url}
+                                    className="w-full h-full object-cover"
+                                    controls
+                                  />
+                                </div>
                               ) : (
-                                <img src={attachment.url} alt={attachment.name || 'Attachment'} className="h-32 w-full rounded-lg object-cover" />
+                                <div 
+                                  className="aspect-square cursor-pointer"
+                                  onClick={() => setImageViewer({ open: true, url: attachment.url, name: attachment.name || `Evidence ${idx + 1}` })}
+                                >
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.name || 'Attachment'} 
+                                    className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                  />
+                                </div>
                               )}
-                              <p className="mt-2 text-xs text-slate-500 truncate">{attachment.name || `Attachment ${idx + 1}`}</p>
+                              {!isOrderCompleted && (
+                                <button
+                                  type="button"
+                                  className="absolute top-2 right-2 p-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeFollowUpAttachment(idx);
+                                  }}
+                                  disabled={isOrderCompleted}
+                                  title="Remove"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1551,61 +1860,148 @@ export const OrdersPage = () => {
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">
-                  <h4 className="text-sm font-semibold text-slate-900">Spare Parts / Cost Summary</h4>
-                  {spareParts.length > 0 ? (
-                    <>
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                          <thead className="text-xs uppercase tracking-wide text-slate-500">
-                            <tr>
-                              <th className="px-3 py-2">Item</th>
-                              <th className="px-3 py-2">Qty</th>
-                              <th className="px-3 py-2">Unit price</th>
-                              <th className="px-3 py-2 text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {spareParts.map((part, idx) => {
-                              const partName =
-                                typeof part.part === 'string'
-                                  ? part.part
-                                  : part.part?.name || part.part?.sku || 'Part';
-                              const unitPrice = part?.unitPrice ?? (typeof part?.part === 'object' ? part.part?.unitPrice ?? 0 : 0);
-                              const total = (part.quantity ?? 0) * unitPrice;
-                              return (
-                                <tr key={`${partName}-${idx}`}>
-                                  <td className="px-3 py-2 text-slate-700">{partName}</td>
-                                  <td className="px-3 py-2 text-slate-500">{part.quantity ?? 0}</td>
-                                  <td className="px-3 py-2 text-slate-500">{formatCurrency(unitPrice)}</td>
-                                  <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(total)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm">
-                        <div className="flex items-center justify-between text-slate-600">
-                          <span>Parts subtotal</span>
-                          <span className="font-semibold text-slate-900">{formatCurrency(sparePartsSubtotal)}</span>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Spare Parts / Cost Summary</h4>
+                    {!isOrderCompleted && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => setShowAddSparePart(!showAddSparePart)}
+                        className="text-xs"
+                      >
+                        {showAddSparePart ? 'Cancel' : '+ Add Spare'}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {showAddSparePart && (
+                    <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <Select
+                        label="Select Spare Part *"
+                        value={selectedSparePartId}
+                        onChange={(e) => setSelectedSparePartId(e.target.value)}
+                      >
+                        <option value="">Choose a spare part...</option>
+                        {allSpareparts.map((part) => (
+                          <option key={part._id} value={part._id}>
+                            {part.name} ({part.sku}) - {formatCurrency(part.unitPrice)}
+                          </option>
+                        ))}
+                      </Select>
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        placeholder="1"
+                        value={sparePartQuantity}
+                        onChange={(e) => setSparePartQuantity(e.target.value)}
+                        min="1"
+                        step="1"
+                      />
+                      {selectedSparePartId && (
+                        <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
+                          <span className="font-semibold">Total: </span>
+                          {formatCurrency(
+                            (allSpareparts.find(p => p._id === selectedSparePartId)?.unitPrice || 0) * 
+                            parseFloat(sparePartQuantity || '1')
+                          )}
                         </div>
-                        <div className="flex items-center justify-between text-slate-600">
-                          <span>Additional charges</span>
-                          <span className="font-semibold text-slate-900">{formatCurrency(jobCard?.additionalCharges ?? 0)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-slate-600">
-                          <span>Service estimate</span>
-                          <span className="font-semibold text-slate-900">{formatCurrency(jobCard?.estimateAmount ?? servicePrice)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-base font-semibold text-slate-900">
-                          <span>Total payable</span>
-                          <span>{jobCard ? formatCurrency(jobCard.finalAmount) : formatCurrency(servicePrice + sparePartsSubtotal)}</span>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="mt-2 text-xs text-slate-500">No spare parts logged for this job.</p>
+                      )}
+                      <Button
+                        onClick={handleAddSparePart}
+                        loading={addSparePartMutation.isPending}
+                        className="w-full"
+                      >
+                        Add Spare Part
+                      </Button>
+                    </div>
                   )}
+                  
+                  {spareParts.length > 0 && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="text-xs uppercase tracking-wide text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2">Item</th>
+                            <th className="px-3 py-2">Qty</th>
+                            <th className="px-3 py-2">Unit price</th>
+                            <th className="px-3 py-2 text-right">Total</th>
+                            {!isOrderCompleted && <th className="px-3 py-2"></th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {spareParts.map((part, idx) => {
+                            const partName =
+                              typeof part.part === 'string'
+                                ? part.part
+                                : part.part?.name || part.part?.sku || 'Part';
+                            const unitPrice = part?.unitPrice ?? (typeof part?.part === 'object' ? part.part?.unitPrice ?? 0 : 0);
+                            const total = (part.quantity ?? 0) * unitPrice;
+                            return (
+                              <tr key={`${partName}-${idx}`}>
+                                <td className="px-3 py-2 text-slate-700">{partName}</td>
+                                <td className="px-3 py-2 text-slate-500">{part.quantity ?? 0}</td>
+                                <td className="px-3 py-2 text-slate-500">{formatCurrency(unitPrice)}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(total)}</td>
+                                {!isOrderCompleted && (
+                                  <td className="px-3 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (jobCardModal.order?._id) {
+                                          removeSparePartMutation.mutate({ orderId: jobCardModal.order._id, index: idx });
+                                        }
+                                      }}
+                                      className="text-rose-500 hover:text-rose-700 transition-colors"
+                                      disabled={removeSparePartMutation.isPending}
+                                      title="Remove spare part"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Service Price</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(servicePrice)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Spare Parts Subtotal</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(sparePartsSubtotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Additional Services</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(extraWorksSubtotal)}</span>
+                    </div>
+                    {jobCard?.additionalCharges ? (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span>Additional Charges</span>
+                        <span className="font-semibold text-slate-900">{formatCurrency(jobCard.additionalCharges)}</span>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-slate-600">
+                      <span>Subtotal</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0))}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Tax (18%)</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0)) * 0.18)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Discount</span>
+                      <span className="font-semibold text-emerald-600">-{formatCurrency(0)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t-2 border-slate-300 pt-2 text-base font-bold text-slate-900">
+                      <span>Grand Total</span>
+                      <span className="text-lg">{formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0)) * 1.18)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1826,6 +2222,152 @@ export const OrdersPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Image Viewer Modal */}
+      {imageViewer.open && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (e.target === e.currentTarget) {
+              setImageViewer({ open: false, url: '', name: '' });
+              setImageZoom(100);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setImageViewer({ open: false, url: '', name: '' });
+              setImageZoom(100);
+            }
+          }}
+          tabIndex={-1}
+          style={{ isolation: 'isolate' }}
+        >
+          {/* Top Bar */}
+          <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/60 to-transparent">
+            <div className="flex-1">
+              <h3 className="text-white font-semibold text-lg truncate">{imageViewer.name}</h3>
+              <p className="text-white/60 text-sm mt-0.5">Click and drag to pan • Scroll to zoom</p>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImageViewer({ open: false, url: '', name: '' });
+                setImageZoom(100);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all ml-4"
+              aria-label="Close image viewer"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Image Container */}
+          <div 
+            className="flex-1 flex items-center justify-center overflow-auto p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div 
+              className="relative transition-transform duration-200 ease-out"
+              style={{ 
+                transform: `scale(${imageZoom / 100})`,
+                cursor: imageZoom > 100 ? 'move' : 'default'
+              }}
+            >
+              <img
+                src={imageViewer.url}
+                alt={imageViewer.name}
+                className="max-w-none shadow-2xl rounded-lg"
+                style={{ maxHeight: '80vh', maxWidth: imageZoom === 100 ? '90vw' : 'none' }}
+                onClick={(e) => e.stopPropagation()}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const delta = e.deltaY > 0 ? -10 : 10;
+                  setImageZoom(prev => Math.min(Math.max(50, prev + delta), 300));
+                }}
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Controls Bar */}
+          <div className="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-t from-black/60 to-transparent">
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageZoom(prev => Math.max(50, prev - 10));
+                }}
+                disabled={imageZoom <= 50}
+                className="p-2 rounded-lg hover:bg-white/10 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Zoom out"
+              >
+                <MagnifyingGlassMinusIcon className="h-5 w-5" />
+              </button>
+              
+              <div className="flex items-center gap-2 px-3">
+                <input
+                  type="range"
+                  min="50"
+                  max="300"
+                  step="10"
+                  value={imageZoom}
+                  onChange={(e) => setImageZoom(Number(e.target.value))}
+                  className="w-32 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${((imageZoom - 50) / 250) * 100}%, rgba(255,255,255,0.2) ${((imageZoom - 50) / 250) * 100}%, rgba(255,255,255,0.2) 100%)`
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className="text-white font-medium text-sm min-w-[3.5rem] text-center">{imageZoom}%</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageZoom(prev => Math.min(300, prev + 10));
+                }}
+                disabled={imageZoom >= 300}
+                className="p-2 rounded-lg hover:bg-white/10 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Zoom in"
+              >
+                <MagnifyingGlassPlusIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImageZoom(100);
+              }}
+              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all flex items-center gap-2"
+              title="Reset zoom"
+            >
+              <ArrowsPointingOutIcon className="h-4 w-4" />
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(imageViewer.url, '_blank');
+              }}
+              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all flex items-center gap-2"
+              title="Open in new tab"
+            >
+              <ArrowsPointingOutIcon className="h-4 w-4" />
+              Full Screen
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

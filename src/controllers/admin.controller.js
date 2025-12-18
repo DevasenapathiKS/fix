@@ -173,3 +173,23 @@ export const addOrderHistoryNote = asyncHandler(async (req, res) => {
   const payload = await AdminService.addOrderHistoryNote(req.params.orderId, req.body.message, req.user.id);
   return successResponse(res, { data: payload, message: 'Activity note recorded' });
 });
+
+export const addOrderSparePart = asyncHandler(async (req, res) => {
+  const payload = await AdminService.addJobSparePart(req.params.orderId, req.body, req.user.id);
+  return successResponse(res, { data: payload, message: 'Spare part added successfully' });
+});
+
+export const addOrderAdditionalService = asyncHandler(async (req, res) => {
+  const payload = await AdminService.addJobAdditionalService(req.params.orderId, req.body, req.user.id);
+  return successResponse(res, { data: payload, message: 'Additional service added successfully' });
+});
+
+export const removeOrderSparePart = asyncHandler(async (req, res) => {
+  const payload = await AdminService.removeJobSparePart(req.params.orderId, parseInt(req.params.index), req.user.id);
+  return successResponse(res, { data: payload, message: 'Spare part removed successfully' });
+});
+
+export const removeOrderAdditionalService = asyncHandler(async (req, res) => {
+  const payload = await AdminService.removeJobAdditionalService(req.params.orderId, parseInt(req.params.index), req.user.id);
+  return successResponse(res, { data: payload, message: 'Additional service removed successfully' });
+});

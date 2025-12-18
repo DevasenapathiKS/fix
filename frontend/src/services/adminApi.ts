@@ -84,7 +84,15 @@ export const OrdersAPI = {
   updatePaymentStatus: (orderId: string, payload: { status: 'pending' | 'partial' | 'paid' }) =>
     extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/payment-status`, payload)),
   addHistoryNote: (orderId: string, payload: { message: string }) =>
-    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/history`, payload))
+    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/history`, payload)),
+  addSparePart: (orderId: string, payload: { sparePartId: string; quantity: number; unitPrice: number }) =>
+    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/spare-parts`, payload)),
+  removeSparePart: (orderId: string, sparePartIndex: number) =>
+    extract<JobCardDetail>(apiClient.delete<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/spare-parts/${sparePartIndex}`)),
+  addAdditionalService: (orderId: string, payload: { description: string; amount: number; serviceItemId?: string }) =>
+    extract<JobCardDetail>(apiClient.post<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/additional-services`, payload)),
+  removeAdditionalService: (orderId: string, serviceIndex: number) =>
+    extract<JobCardDetail>(apiClient.delete<ApiSuccess<JobCardDetail>>(`/admin/orders/${orderId}/additional-services/${serviceIndex}`))
 };
 
 export const CatalogAPI = {

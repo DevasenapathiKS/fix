@@ -745,6 +745,212 @@ export const AdminService = {
     return this.getJobCardDetail(orderId);
   },
 
+  async addJobSparePart(orderId, payload, adminId) {
+    const { sparePartId, quantity, unitPrice } = payload;
+    
+    if (!sparePartId) {
+      throw new ApiError(400, 'Spare part ID is required');
+    }
+    if (quantity <= 0) {
+      throw new ApiError(400, 'Quantity must be greater than 0');
+    }
+    if (unitPrice < 0) {
+      throw new ApiError(400, 'Unit price cannot be negative');
+    }
+
+    // Verify spare part exists
+    const sparePart = await SparePart.findById(sparePartId);
+    if (!sparePart) {
+      throw new ApiError(404, 'Spare part not found');
+    }
+
+    const order = await Order.findById(orderId).select('status assignedTechnician');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Cannot modify completed jobs');
+    }
+
+    let jobCard = await JobCard.findOne({ order: orderId });
+    if (!jobCard) {
+      // Create job card if it doesn't exist
+      if (!order.assignedTechnician) {
+        throw new ApiError(400, 'Order must have an assigned technician before adding spare parts');
+      }
+      jobCard = await JobCard.create({
+        order: orderId,
+        technician: order.assignedTechnician,
+        status: JOB_STATUS.PENDING,
+        sparePartsUsed: []
+      });
+    }
+
+    jobCard.sparePartsUsed.push({
+      part: sparePartId,
+      quantity: parseFloat(quantity),
+      unitPrice: parseFloat(unitPrice)
+    });
+
+    await jobCard.save();
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'SPARE_PART_ADDED',
+      message: `Added spare part: ${sparePart.name} (Qty: ${quantity})`,
+      performedBy: adminId
+    });
+
+    return this.getJobCardDetail(orderId);
+  },
+
+  async addJobAdditionalService(orderId, payload, adminId) {
+    const { description, amount, serviceItemId } = payload;
+    
+    if (!description || !description.trim()) {
+      throw new ApiError(400, 'Service description is required');
+    }
+    if (amount < 0) {
+      throw new ApiError(400, 'Amount cannot be negative');
+    }
+
+    const order = await Order.findById(orderId)
+      .select('status assignedTechnician serviceCategory serviceItem')
+      .populate('serviceItem');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Cannot modify completed jobs');
+    }
+
+    // Get service item for category reference
+    let serviceItem = null;
+    let serviceCategory = null;
+    
+    if (serviceItemId) {
+      serviceItem = await ServiceItem.findById(serviceItemId);
+      if (!serviceItem) {
+        throw new ApiError(404, 'Service item not found');
+      }
+      serviceCategory = serviceItem.category;
+    } else {
+      // Use the order's service item and category as defaults
+      if (order.serviceItem && typeof order.serviceItem === 'object') {
+        serviceItem = order.serviceItem._id;
+        serviceCategory = order.serviceItem.category;
+      } else if (order.serviceItem) {
+        serviceItem = order.serviceItem;
+        serviceCategory = order.serviceCategory;
+      } else {
+        throw new ApiError(400, 'Service item is required for additional services');
+      }
+    }
+
+    let jobCard = await JobCard.findOne({ order: orderId });
+    if (!jobCard) {
+      // Create job card if it doesn't exist
+      if (!order.assignedTechnician) {
+        throw new ApiError(400, 'Order must have an assigned technician before adding services');
+      }
+      jobCard = await JobCard.create({
+        order: orderId,
+        technician: order.assignedTechnician,
+        status: JOB_STATUS.PENDING,
+        extraWork: []
+      });
+    }
+
+    if (!jobCard.extraWork) {
+      jobCard.extraWork = [];
+    }
+
+    jobCard.extraWork.push({
+      description: description.trim(),
+      amount: parseFloat(amount),
+      serviceCategory: serviceCategory,
+      serviceItem: serviceItem
+    });
+
+    await jobCard.save();
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'SERVICE_ADDED',
+      message: `Added additional service: ${description}`,
+      performedBy: adminId
+    });
+
+    return this.getJobCardDetail(orderId);
+  },
+
+  async removeJobSparePart(orderId, index, adminId) {
+    const order = await Order.findById(orderId).select('status');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Cannot modify completed jobs');
+    }
+
+    const jobCard = await JobCard.findOne({ order: orderId });
+    if (!jobCard) {
+      throw new ApiError(404, 'Job card not found');
+    }
+
+    if (!jobCard.sparePartsUsed || index < 0 || index >= jobCard.sparePartsUsed.length) {
+      throw new ApiError(400, 'Invalid spare part index');
+    }
+
+    const removedPart = jobCard.sparePartsUsed[index];
+    jobCard.sparePartsUsed.splice(index, 1);
+    await jobCard.save();
+
+    const partInfo = typeof removedPart.part === 'object' ? removedPart.part : await SparePart.findById(removedPart.part);
+    const partName = partInfo?.name || partInfo?.sku || 'Spare part';
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'SPARE_PART_REMOVED',
+      message: `Removed spare part: ${partName}`,
+      performedBy: adminId
+    });
+
+    return this.getJobCardDetail(orderId);
+  },
+
+  async removeJobAdditionalService(orderId, index, adminId) {
+    const order = await Order.findById(orderId).select('status');
+    if (!order) {
+      throw new ApiError(404, 'Order not found');
+    }
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      throw new ApiError(400, 'Cannot modify completed jobs');
+    }
+
+    const jobCard = await JobCard.findOne({ order: orderId });
+    if (!jobCard) {
+      throw new ApiError(404, 'Job card not found');
+    }
+
+    if (!jobCard.extraWork || index < 0 || index >= jobCard.extraWork.length) {
+      throw new ApiError(400, 'Invalid service index');
+    }
+
+    const removedService = jobCard.extraWork[index];
+    jobCard.extraWork.splice(index, 1);
+    await jobCard.save();
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'SERVICE_REMOVED',
+      message: `Removed additional service: ${removedService.description}`,
+      performedBy: adminId
+    });
+
+    return this.getJobCardDetail(orderId);
+  },
+
   async listTechnicianAttendance(technicianId, filters = {}) {
     const { from, to } = filters;
     const query = { technician: technicianId };

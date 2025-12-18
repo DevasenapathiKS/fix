@@ -28,6 +28,10 @@ import {
   deleteOrderMedia,
   updateOrderPaymentStatus,
   addOrderHistoryNote,
+  addOrderSparePart,
+  addOrderAdditionalService,
+  removeOrderSparePart,
+  removeOrderAdditionalService,
   listCustomers,
   findCustomerByPhone,
   createCustomer,
@@ -106,6 +110,46 @@ router.post(
     body('message').isString().trim().isLength({ min: 1, max: 1000 })
   ]),
   addOrderHistoryNote
+);
+
+router.post(
+  '/orders/:orderId/spare-parts',
+  validate([
+    param('orderId').isMongoId(),
+    body('sparePartId').isMongoId(),
+    body('quantity').isFloat({ min: 0.01 }),
+    body('unitPrice').isFloat({ min: 0 })
+  ]),
+  addOrderSparePart
+);
+
+router.post(
+  '/orders/:orderId/additional-services',
+  validate([
+    param('orderId').isMongoId(),
+    // body('description').isString().trim().notEmpty(),
+    body('amount').isFloat({ min: 0 }),
+    body('serviceItemId').optional().isMongoId()
+  ]),
+  addOrderAdditionalService
+);
+
+router.delete(
+  '/orders/:orderId/spare-parts/:index',
+  validate([
+    param('orderId').isMongoId(),
+    param('index').isInt({ min: 0 })
+  ]),
+  removeOrderSparePart
+);
+
+router.delete(
+  '/orders/:orderId/additional-services/:index',
+  validate([
+    param('orderId').isMongoId(),
+    param('index').isInt({ min: 0 })
+  ]),
+  removeOrderAdditionalService
 );
 
 router.get('/technicians', listTechnicians);
