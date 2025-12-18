@@ -12,6 +12,57 @@ export interface AuthUser {
   role: UserRole;
 }
 
+export interface CustomerSummary {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  city?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  postalCode?: string;
+  loyaltyTier?: string;
+  createdAt?: string;
+  addresses?: Array<{
+    id: string;
+    label?: string;
+    contactName?: string;
+    phone?: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    isDefault?: boolean;
+  }>;
+}
+
+export interface CreateCustomerPayload {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+  };
+}
+
+export interface CreateOrderPayload {
+  customerId: string;
+  serviceItem: string;
+  scheduledAt: string;
+  timeWindowStart: string;
+  timeWindowEnd: string;
+  addressId?: string;
+  slotLabel?: string;
+  issueDescription?: string;
+  estimatedCost?: number;
+  notes?: string;
+}
+
 export interface Order {
   _id: string;
   customer: {

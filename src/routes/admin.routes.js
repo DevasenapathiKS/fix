@@ -27,7 +27,11 @@ import {
   uploadOrderMedia,
   deleteOrderMedia,
   updateOrderPaymentStatus,
-  addOrderHistoryNote
+  addOrderHistoryNote,
+  listCustomers,
+  findCustomerByPhone,
+  createCustomer,
+  createOrderFromAdmin
 } from '../controllers/admin.controller.js';
 import { authenticate, allowAdminOnly } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
@@ -162,6 +166,45 @@ router.post(
 );
 
 router.get('/time-slots', listTimeSlots);
+
+router.get('/customers', listCustomers);
+router.get(
+  '/customers/phone/:phone',
+  validate([param('phone').notEmpty().withMessage('Phone number is required')]),
+  findCustomerByPhone
+);
+router.post(
+  '/customers',
+  validate([
+    body('name').notEmpty().withMessage('Name is required'),
+    body('phone').notEmpty().withMessage('Phone is required'),
+    body('email').optional().isEmail(),
+    body('address.line1').optional().notEmpty(),
+    body('address.city').optional().notEmpty(),
+    body('address.state').optional().notEmpty(),
+    body('address.postalCode').optional().notEmpty()
+  ]),
+  createCustomer
+);
+
+router.post(
+  '/orders',
+  validate([
+    body('customerId').isMongoId().withMessage('Valid customer ID is required'),
+    body('serviceItem').isMongoId().withMessage('Valid service item is required'),
+    body('scheduledAt').isISO8601().withMessage('Valid scheduled date is required'),
+    body('timeWindowStart').isISO8601().withMessage('Valid time window start is required'),
+    body('timeWindowEnd').isISO8601().withMessage('Valid time window end is required'),
+    body('addressId').optional().isMongoId(),
+    body('address').optional().isObject(),
+    body('address.line1').optional().notEmpty(),
+    body('address.city').optional().notEmpty(),
+    body('address.state').optional().notEmpty(),
+    body('issueDescription').optional().isString(),
+    body('estimatedCost').optional().isFloat({ min: 0 })
+  ]),
+  createOrderFromAdmin
+);
 
 router.post(
   '/time-slots',

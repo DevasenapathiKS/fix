@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { OrdersAPI, TechniciansAPI, TimeSlotsAPI } from '../services/adminApi';
+import { OrdersAPI, TechniciansAPI, TimeSlotsAPI, CustomersAPI, CatalogAPI } from '../services/adminApi';
 import type {
   JobCardDetail,
   Order,
@@ -9,7 +9,10 @@ import type {
   TechnicianScheduleEntry,
   TimeSlotTemplate,
   OrderHistoryEntry,
-  FollowUpAttachment
+  FollowUpAttachment,
+  CustomerSummary,
+  ServiceCategory,
+  ServiceItem
 } from '../types';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -107,12 +110,32 @@ const buildAddress = (customer?: AddressLike) => {
 
 export const OrdersPage = () => {
   const [status, setStatus] = useState('');
+  const [createOrderModal, setCreateOrderModal] = useState(false);
   const [assignModal, setAssignModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [rescheduleModal, setRescheduleModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [jobCardModal, setJobCardModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [assigningTech, setAssigningTech] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  
+  // Create order form state
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerData, setCustomerData] = useState<CustomerSummary | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedService, setSelectedService] = useState('');
+  const [orderDate, setOrderDate] = useState('');
+  const [orderStartTime, setOrderStartTime] = useState('09:00');
+  const [orderEndTime, setOrderEndTime] = useState('11:00');
+  const [issueDescription, setIssueDescription] = useState('');
+  const [checkingCustomer, setCheckingCustomer] = useState(false);
   const [scheduleDrawer, setScheduleDrawer] = useState<{ open: boolean; technicianId: string | null; name: string }>(
     {
       open: false,
@@ -150,6 +173,18 @@ export const OrdersPage = () => {
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['orders', status],
     queryFn: () => OrdersAPI.list({ status: status || undefined })
+  });
+
+  const { data: categories = [] } = useQuery<ServiceCategory[]>({
+    queryKey: ['categories'],
+    queryFn: CatalogAPI.categories,
+    enabled: createOrderModal
+  });
+
+  const { data: serviceItems = [] } = useQuery<ServiceItem[]>({
+    queryKey: ['service-items', selectedCategory],
+    queryFn: () => CatalogAPI.serviceItems(selectedCategory || undefined),
+    enabled: createOrderModal && Boolean(selectedCategory)
   });
 
   const { data: candidates = [], isFetching: loadingCandidates } = useQuery<TechnicianCandidate[]>({
@@ -619,6 +654,163 @@ export const OrdersPage = () => {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to record note')
   });
 
+  const checkCustomerMutation = useMutation({
+    mutationFn: (phone: string) => CustomersAPI.findByPhone(phone),
+    onSuccess: (data) => {
+      if (data) {
+        setCustomerData(data);
+        setCustomerName(data.name || '');
+        setCustomerEmail(data.email || '');
+        
+        // Set default address or first address
+        const defaultAddr = data.addresses?.find(a => a.isDefault) || data.addresses?.[0];
+        if (defaultAddr) {
+          setSelectedAddressId(defaultAddr.id);
+          setAddressLine1(defaultAddr.line1 || '');
+          setAddressLine2(defaultAddr.line2 || '');
+          setCity(defaultAddr.city || '');
+          setState(defaultAddr.state || '');
+          setPostalCode(defaultAddr.postalCode || '');
+        } else {
+          setAddressLine1(data.addressLine1 || '');
+          setAddressLine2(data.addressLine2 || '');
+          setCity(data.city || '');
+          setState('');
+          setPostalCode(data.postalCode || '');
+        }
+        
+        toast.success('Customer found!');
+      } else {
+        setCustomerData(null);
+        setSelectedAddressId('');
+        setCustomerName('');
+        setCustomerEmail('');
+        setAddressLine1('');
+        setAddressLine2('');
+        setCity('');
+        setState('');
+        setPostalCode('');
+        toast('Customer not found. Please enter details to create new customer.', { icon: 'ℹ️' });
+      }
+      setCheckingCustomer(false);
+    },
+    onError: () => {
+      toast.error('Failed to check customer');
+      setCheckingCustomer(false);
+    }
+  });
+
+  const createOrderMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      // Create new customer if doesn't exist
+      if (!customerData) {
+        const newCustomer = await CustomersAPI.create({
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          address: { line1: addressLine1, line2: addressLine2, city, state, postalCode }
+        });
+        // For new customers, address is created automatically
+        // Don't pass addressId, it will be handled by backend
+        return OrdersAPI.create({ ...payload, customerId: newCustomer.id });
+      }
+
+      // For existing customers, payload already has addressId or address
+      return OrdersAPI.create(payload);
+    },
+    onSuccess: () => {
+      toast.success('Order created successfully!');
+      setCreateOrderModal(false);
+      resetCreateOrderForm();
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to create order')
+  });
+
+  const resetCreateOrderForm = () => {
+    setCustomerPhone('');
+    setCustomerData(null);
+    setSelectedAddressId('');
+    setCustomerName('');
+    setCustomerEmail('');
+    setAddressLine1('');
+    setAddressLine2('');
+    setCity('');
+    setState('');
+    setPostalCode('');
+    setSelectedCategory('');
+    setSelectedService('');
+    setOrderDate('');
+    setOrderStartTime('09:00');
+    setOrderEndTime('11:00');
+    setIssueDescription('');
+  };
+
+  const handleAddressChange = (addressId: string) => {
+    setSelectedAddressId(addressId);
+    const address = customerData?.addresses?.find(a => a.id === addressId);
+    if (address) {
+      setAddressLine1(address.line1 || '');
+      setAddressLine2(address.line2 || '');
+      setCity(address.city || '');
+      setState(address.state || '');
+      setPostalCode(address.postalCode || '');
+    }
+  };
+
+  const handleCheckCustomer = () => {
+    if (!customerPhone.trim()) {
+      toast.error('Please enter phone number');
+      return;
+    }
+    setCheckingCustomer(true);
+    checkCustomerMutation.mutate(customerPhone);
+  };
+
+  const handleCreateOrder = () => {
+    if (!customerPhone || !customerName || !selectedService || !orderDate) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+    
+    // Validate address - either selected or manually filled
+    const hasSelectedAddress = selectedAddressId;
+    const hasManualAddress = addressLine1 && city && state;
+    
+    if (!hasSelectedAddress && !hasManualAddress) {
+      toast.error('Please select an address or fill in address details');
+      return;
+    }
+    
+    const scheduledDate = new Date(`${orderDate}T${orderStartTime}`);
+    const endDate = new Date(`${orderDate}T${orderEndTime}`);
+    
+    const orderPayload: any = {
+      customerId: customerData?.id,
+      serviceItem: selectedService,
+      scheduledAt: scheduledDate.toISOString(),
+      timeWindowStart: scheduledDate.toISOString(),
+      timeWindowEnd: endDate.toISOString(),
+      issueDescription,
+      slotLabel: `${orderStartTime} - ${orderEndTime}`
+    };
+    
+    // Add address ID if selected, otherwise send address data to create new one
+    if (selectedAddressId) {
+      orderPayload.addressId = selectedAddressId;
+    } else if (hasManualAddress) {
+      orderPayload.address = {
+        line1: addressLine1,
+        line2: addressLine2,
+        city,
+        state,
+        postalCode
+      };
+    }
+    
+    createOrderMutation.mutate(orderPayload);
+  };
+
   const statusActionDisabled =
     !jobCardModal.order?._id ||
     !jobStatusChoice ||
@@ -639,13 +831,16 @@ export const OrdersPage = () => {
           <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Live Orders</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-900">Admin Assignment Console</h1>
         </div>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-          {statusFilterOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
+        <div className="flex gap-3">
+          <Button onClick={() => setCreateOrderModal(true)}>+ Create Order</Button>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+            {statusFilterOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
 
       <Card>
@@ -1451,6 +1646,186 @@ export const OrdersPage = () => {
           })}
         </ol>
       </Drawer>
+
+      {/* Create Order Modal */}
+      <Modal open={createOrderModal} onClose={() => { setCreateOrderModal(false); resetCreateOrderForm(); }} title="Create New Order">
+        <div className="space-y-6">
+          {/* Customer lookup */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Customer Information</h3>
+            <div className="flex gap-2">
+              <Input
+                label="Customer Phone Number"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="Enter phone number"
+                disabled={checkingCustomer}
+              />
+              <Button 
+                onClick={handleCheckCustomer} 
+                loading={checkingCustomer}
+                variant="secondary"
+                className="mt-6"
+              >
+                Check
+              </Button>
+            </div>
+
+            {customerData && (
+              <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+                ✓ Customer found: {customerData.name}
+              </div>
+            )}
+
+            <Input
+              label="Customer Name *"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Enter customer name"
+              disabled={Boolean(customerData && customerName)}
+            />
+
+            <Input
+              label="Email"
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              placeholder="customer@email.com"
+              disabled={Boolean(customerData && customerEmail)}
+            />
+          </div>
+
+          {/* Address */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Service Address</h3>
+            
+            {customerData && customerData.addresses && customerData.addresses.length > 0 && (
+              <Select
+                label="Select Address *"
+                value={selectedAddressId}
+                onChange={(e) => handleAddressChange(e.target.value)}
+              >
+                <option value="">Choose an address</option>
+                {customerData.addresses.map((addr) => (
+                  <option key={addr.id} value={addr.id}>
+                    {addr.label || 'Address'} - {addr.line1}, {addr.city} {addr.isDefault ? '(Default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            )}
+
+            <Input
+              label="Address Line 1 *"
+              value={addressLine1}
+              onChange={(e) => setAddressLine1(e.target.value)}
+              placeholder="Street address"
+              disabled={Boolean(customerData && addressLine1)}
+            />
+            <Input
+              label="Address Line 2"
+              value={addressLine2}
+              onChange={(e) => setAddressLine2(e.target.value)}
+              placeholder="Apartment, suite, etc."
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="City *"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="City"
+                disabled={Boolean(customerData && city)}
+              />
+              <Input
+                label="State *"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                placeholder="State"
+                disabled={Boolean(customerData && state)}
+              />
+            </div>
+            <Input
+              label="Postal Code"
+              value={postalCode}
+              onChange={(e) => setPostalCode(e.target.value)}
+              placeholder="PIN Code"
+              disabled={Boolean(customerData && postalCode)}
+            />
+          </div>
+
+          {/* Service selection */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Service Details</h3>
+            <Select
+              label="Service Category *"
+              value={selectedCategory}
+              onChange={(e) => { setSelectedCategory(e.target.value); setSelectedService(''); }}
+            >
+              <option value="">Select category</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              label="Service Item *"
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              disabled={!selectedCategory}
+            >
+              <option value="">Select service</option>
+              {serviceItems.map((item) => (
+                <option key={item._id} value={item._id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+
+            <TextArea
+              label="Issue Description"
+              value={issueDescription}
+              onChange={(e) => setIssueDescription(e.target.value)}
+              placeholder="Describe the issue..."
+              rows={3}
+            />
+          </div>
+
+          {/* Schedule */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Schedule</h3>
+            <Input
+              label="Order Date *"
+              type="date"
+              value={orderDate}
+              onChange={(e) => setOrderDate(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Start Time *"
+                type="time"
+                value={orderStartTime}
+                onChange={(e) => setOrderStartTime(e.target.value)}
+              />
+              <Input
+                label="End Time *"
+                type="time"
+                value={orderEndTime}
+                onChange={(e) => setOrderEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button onClick={handleCreateOrder} loading={createOrderMutation.isPending}>
+              Create Order
+            </Button>
+            <Button variant="secondary" onClick={() => { setCreateOrderModal(false); resetCreateOrderForm(); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

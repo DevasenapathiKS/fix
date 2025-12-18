@@ -10,6 +10,7 @@ import { SparePartsPage } from '../pages/SparePartsPage';
 import { CreateUserPage } from '../pages/CreateUserPage';
 import { TimeSlotsPage } from '../pages/TimeSlotsPage';
 import { TechniciansPage } from '../pages/TechniciansPage';
+import { CustomersPage } from '../pages/CustomersPage';
 
 const AppRouter = () => (
   <Routes>
@@ -23,6 +24,7 @@ const AppRouter = () => (
     >
       <Route path="/" element={<DashboardPage />} />
       <Route path="/orders" element={<OrdersPage />} />
+      <Route path="/customers" element={<CustomersPage />} />
       <Route path="/catalog" element={<CatalogPage />} />
       <Route path="/catalog/:categoryId" element={<CategoryDetailPage />} />
       <Route path="/technicians" element={<TechniciansPage />} />

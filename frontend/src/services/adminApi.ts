@@ -17,6 +17,8 @@ import type {
   UserRole,
   FollowUpAttachment,
   JobCardDetail
+  ,
+  CustomerSummary
 } from '../types';
 
 interface ApiSuccess<T> {
@@ -64,6 +66,7 @@ export const OrdersAPI = {
         params: filters
       })
     ),
+  create: (payload: any) => extract<Order>(apiClient.post<ApiSuccess<Order>>('/admin/orders', payload)),
   assign: (orderId: string, technicianId: string) =>
     extract<Order>(apiClient.post<ApiSuccess<Order>>(`/admin/orders/${orderId}/assign`, { technicianId })),
   candidates: (orderId: string) =>
@@ -146,4 +149,10 @@ export const TimeSlotsAPI = {
   update: (id: string, payload: Partial<TimeSlotTemplate>) =>
     extract<TimeSlotTemplate>(apiClient.put<ApiSuccess<TimeSlotTemplate>>(`/admin/time-slots/${id}`, payload)),
   remove: (id: string) => extract<Record<string, never>>(apiClient.delete<ApiSuccess<Record<string, never>>>(`/admin/time-slots/${id}`))
+};
+
+export const CustomersAPI = {
+  list: () => extract<CustomerSummary[]>(apiClient.get<ApiSuccess<CustomerSummary[]>>('/admin/customers')),
+  findByPhone: (phone: string) => extract<CustomerSummary | null>(apiClient.get<ApiSuccess<CustomerSummary | null>>(`/admin/customers/phone/${phone}`)),
+  create: (payload: any) => extract<CustomerSummary>(apiClient.post<ApiSuccess<CustomerSummary>>('/admin/customers', payload))
 };

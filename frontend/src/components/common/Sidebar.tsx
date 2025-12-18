@@ -5,6 +5,7 @@ import clsx from 'clsx';
 const links = [
   { to: '/', label: 'Overview', icon: Squares2X2Icon },
   { to: '/orders', label: 'Orders', icon: ClipboardDocumentListIcon },
+  { to: '/customers', label: 'Customers', icon: UsersIcon },
   { to: '/catalog', label: 'Catalog', icon: WrenchIcon },
   { to: '/technicians', label: 'Technicians', icon: UsersIcon },
   { to: '/spare-parts', label: 'Spare Parts', icon: WrenchIcon },

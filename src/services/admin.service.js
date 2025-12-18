@@ -14,6 +14,8 @@ import JobCard from '../models/jobcard.model.js';
 import { JOB_STATUS, ORDER_STATUS, USER_ROLES, NOTIFICATION_EVENTS } from '../constants/index.js';
 import TechnicianAttendance from '../models/technician-attendance.model.js';
 import TechnicianSkill from '../models/technician-skill.model.js';
+import CustomerProfile from '../models/customer-profile.model.js';
+import CustomerAddress from '../models/customer-address.model.js';
 import { notificationService } from './notification.service.js';
 import Payment from '../models/payment.model.js';
 import { orderHistoryService } from './order-history.service.js';
@@ -172,6 +174,202 @@ export const AdminService = {
     return Order.find(query)
       .populate('serviceCategory serviceItem assignedTechnician', 'name')
       .sort({ createdAt: -1 });
+  },
+
+  async listCustomers() {
+    const profiles = await CustomerProfile.find({}).populate('user', 'name email mobile status').lean();
+    if (!profiles.length) return [];
+    const userIds = profiles.map((p) => (p.user?._id ? String(p.user._id) : String(p.user)));
+    const addresses = await CustomerAddress.find({ customer: { $in: userIds } }).lean();
+    const addressMap = addresses.reduce((acc, a) => {
+      const key = String(a.customer);
+      if (!acc[key]) acc[key] = a;
+      if (a.isDefault) acc[key] = a;
+      return acc;
+    }, {});
+
+    return profiles.map((p) => {
+      const user = p.user || {};
+      const id = user._id ? String(user._id) : String(user);
+      const addr = addressMap[id];
+      return {
+        id,
+        name: p.displayName || user.name,
+        email: p.email || user.email,
+        phone: p.phone || user.mobile,
+        city: addr?.city || '',
+        addressLine1: addr?.line1 || '',
+        addressLine2: addr?.line2 || '',
+        postalCode: addr?.postalCode || '',
+        loyaltyTier: p.loyaltyTier || 'standard',
+        createdAt: p.createdAt
+      };
+    });
+  },
+
+  async findCustomerByPhone(phone) {
+    const user = await User.findOne({ mobile: phone, role: USER_ROLES.CUSTOMER }).lean();
+    if (!user) return null;
+
+    const profile = await CustomerProfile.findOne({ user: user._id }).lean();
+    const addresses = await CustomerAddress.find({ customer: user._id }).lean();
+    const defaultAddress = addresses.find((a) => a.isDefault) || addresses[0];
+
+    return {
+      id: String(user._id),
+      name: profile?.displayName || user.name,
+      email: profile?.email || user.email,
+      phone: user.mobile,
+      city: defaultAddress?.city || '',
+      addressLine1: defaultAddress?.line1 || '',
+      addressLine2: defaultAddress?.line2 || '',
+      postalCode: defaultAddress?.postalCode || '',
+      addresses: addresses.map((a) => ({
+        id: String(a._id),
+        label: a.label,
+        contactName: a.contactName,
+        phone: a.phone,
+        line1: a.line1,
+        line2: a.line2,
+        city: a.city,
+        state: a.state,
+        postalCode: a.postalCode,
+        isDefault: a.isDefault
+      }))
+    };
+  },
+
+  async createCustomer(payload) {
+    const exists = await User.findOne({ mobile: payload.phone });
+    if (exists) {
+      throw new ApiError(409, 'Customer with this phone number already exists');
+    }
+
+    const user = await User.create({
+      name: payload.name,
+      email: payload.email || `${payload.phone}@customer.local`,
+      mobile: payload.phone,
+      password: payload.password || 'Customer@123',
+      role: USER_ROLES.CUSTOMER
+    });
+
+    await CustomerProfile.create({
+      user: user._id,
+      displayName: user.name,
+      email: user.email,
+      phone: user.mobile
+    });
+
+    if (payload.address) {
+      await CustomerAddress.create({
+        customer: user._id,
+        contactName: payload.name,
+        phone: payload.phone,
+        line1: payload.address.line1,
+        line2: payload.address.line2,
+        city: payload.address.city,
+        state: payload.address.state,
+        postalCode: payload.address.postalCode,
+        isDefault: true
+      });
+    }
+
+    return {
+      id: String(user._id),
+      name: user.name,
+      email: user.email,
+      phone: user.mobile
+    };
+  },
+
+  async createOrderFromAdmin(payload, adminId) {
+    const [serviceItem, customer] = await Promise.all([
+      ServiceItem.findById(payload.serviceItem).populate('category'),
+      User.findById(payload.customerId)
+    ]);
+
+    if (!serviceItem) throw new ApiError(404, 'Service item not found');
+    if (!customer) throw new ApiError(404, 'Customer not found');
+
+    let address = null;
+    
+    // If addressId is provided and not empty, try to find it
+    if (payload.addressId && payload.addressId.trim()) {
+      address = await CustomerAddress.findOne({ _id: payload.addressId, customer: payload.customerId });
+    }
+    
+    // If address object is provided, create new address
+    if (!address && payload.address && payload.address.line1) {
+      address = await CustomerAddress.create({
+        customer: payload.customerId,
+        contactName: customer.name,
+        phone: customer.mobile,
+        line1: payload.address.line1,
+        line2: payload.address.line2,
+        city: payload.address.city,
+        state: payload.address.state,
+        postalCode: payload.address.postalCode,
+        isDefault: false
+      });
+    }
+    
+    if (!address) {
+      // Try to find default address
+      address = await CustomerAddress.findOne({ customer: payload.customerId, isDefault: true });
+    }
+    
+    if (!address) {
+      // Try to find any address
+      address = await CustomerAddress.findOne({ customer: payload.customerId });
+    }
+
+    if (!address) {
+      throw new ApiError(400, 'Customer address is required. Please provide address details or ensure customer has a saved address.');
+    }
+
+    const order = await Order.create({
+      customer: {
+        name: customer.name,
+        phone: customer.mobile,
+        email: customer.email,
+        addressLine1: address.line1,
+        addressLine2: address.line2,
+        city: address.city,
+        state: address.state,
+        postalCode: address.postalCode
+      },
+      customerUser: payload.customerId,
+      customerAddress: address._id,
+      serviceCategory: serviceItem.category?._id || serviceItem.category,
+      serviceItem: serviceItem._id,
+      scheduledAt: payload.scheduledAt,
+      timeWindowStart: payload.timeWindowStart,
+      timeWindowEnd: payload.timeWindowEnd,
+      status: ORDER_STATUS.PENDING_ASSIGNMENT,
+      preferredSlot: {
+        label: payload.slotLabel || 'Custom',
+        start: payload.timeWindowStart,
+        end: payload.timeWindowEnd
+      },
+      issueDescription: payload.issueDescription || '',
+      estimatedCost: payload.estimatedCost || serviceItem.basePrice,
+      notes: payload.notes
+    });
+
+    await orderHistoryService.recordEntry({
+      orderId: order._id,
+      action: NOTIFICATION_EVENTS.ORDER_CREATED,
+      message: `Order created by admin for customer ${customer.name}`,
+      metadata: { scheduledAt: payload.scheduledAt },
+      performedBy: adminId
+    });
+
+    await notificationService.notifyCustomer(payload.customerId, NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED, {
+      recipient: payload.customerId,
+      orderId: order._id
+    });
+
+    return order.populate('serviceItem serviceCategory', 'name');
   },
 
   async listTechniciansForOrder(orderId) {

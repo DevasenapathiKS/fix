@@ -89,6 +89,26 @@ export const markTechnicianAttendance = asyncHandler(async (req, res) => {
   return successResponse(res, { data: attendance, message: 'Attendance updated' });
 });
 
+export const listCustomers = asyncHandler(async (_req, res) => {
+  const customers = await AdminService.listCustomers();
+  return successResponse(res, { data: customers });
+});
+
+export const findCustomerByPhone = asyncHandler(async (req, res) => {
+  const customer = await AdminService.findCustomerByPhone(req.params.phone);
+  return successResponse(res, { data: customer });
+});
+
+export const createCustomer = asyncHandler(async (req, res) => {
+  const customer = await AdminService.createCustomer(req.body);
+  return successResponse(res, { status: 201, data: customer, message: 'Customer created successfully' });
+});
+
+export const createOrderFromAdmin = asyncHandler(async (req, res) => {
+  const order = await AdminService.createOrderFromAdmin(req.body, req.user.id);
+  return successResponse(res, { status: 201, data: order, message: 'Order created successfully' });
+});
+
 export const createTimeSlot = asyncHandler(async (req, res) => {
   const slot = await AdminService.createTimeSlot(req.body);
   return successResponse(res, { status: 201, data: slot, message: 'Time slot created' });
