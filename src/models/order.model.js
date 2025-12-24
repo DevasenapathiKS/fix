@@ -38,8 +38,20 @@ const orderSchema = new mongoose.Schema(
       start: { type: Date },
       end: { type: Date }
     },
-    serviceCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory', required: true },
-    serviceItem: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceItem', required: true },
+    // Single service (backward compatible)
+    serviceCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory' },
+    serviceItem: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceItem' },
+    // Multiple services support
+    services: [
+      {
+        serviceCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory' },
+        serviceItem: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceItem' },
+        serviceName: { type: String },
+        quantity: { type: Number, default: 1 },
+        issueDescription: { type: String },
+        estimatedCost: { type: Number }
+      }
+    ],
     issueDescription: { type: String },
     media: [
       {

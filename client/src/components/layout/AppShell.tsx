@@ -79,6 +79,23 @@ export const AppShell = ({ links, footerLinks = [], children, onLogout }: AppShe
       </aside>
 
       <div className={styles.main}>
+        <header className={styles.topbar}>
+          <div className={styles.topbarBrand}>
+            <div className={styles.logoMark}>FZ</div>
+            <div>
+              <p className={styles.brandLabel}>Fixzep</p>
+              <p className={styles.brandSub}>Client Portal</p>
+            </div>
+          </div>
+          <div className={styles.topbarActions}>
+            <span className={styles.userChip}>{user?.name || 'Guest'}</span>
+            {onLogout && (
+              <button type="button" className={styles.topbarLogout} onClick={onLogout}>
+                Logout
+              </button>
+            )}
+          </div>
+        </header>
         <div className={styles.content}>{children}</div>
       </div>
     </div>

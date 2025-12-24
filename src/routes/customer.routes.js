@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body, param, query } from 'express-validator';
 import {
   approveAdditionalItems,
+  cancelOrder,
   checkTimeSlot,
   confirmPayment,
   createAddress,
@@ -106,6 +107,14 @@ router.post(
   rateOrder
 );
 router.get('/orders/:orderId/invoice', orderIdValidator, getInvoice);
+router.post(
+  '/orders/:orderId/cancel',
+  validate([
+    param('orderId').isMongoId(),
+    body('reason').optional().isString().isLength({ max: 500 })
+  ]),
+  cancelOrder
+);
 
 router.post('/payments', paymentInitializeValidator, initializePayment);
 router.post('/payments/confirm', paymentConfirmValidator, confirmPayment);

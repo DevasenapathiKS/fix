@@ -144,3 +144,8 @@ export const getInvoice = asyncHandler(async (req, res) => {
   const invoice = await CustomerService.getInvoice(req.user.id, req.params.orderId);
   return successResponse(res, { data: invoice });
 });
+
+export const cancelOrder = asyncHandler(async (req, res) => {
+  const order = await CustomerService.cancelOrder(req.user.id, req.params.orderId, req.body.reason);
+  return successResponse(res, { data: order, message: 'Order cancelled successfully' });
+});

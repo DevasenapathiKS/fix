@@ -57,14 +57,22 @@ export const timeSlotCheckValidator = validate([
 ]);
 
 export const orderCreateValidator = validate([
-  body('serviceCategory').isMongoId(),
-  body('serviceItem').isMongoId(),
+  // For single service orders (optional if services array is provided)
+  body('serviceCategory').optional().isMongoId(),
+  body('serviceItem').optional().isMongoId(),
+  body('issueDescription').optional().isString(),
+  // Required fields
   body('customerAddressId').isMongoId(),
   body('preferredStart').isISO8601(),
   body('preferredEnd').isISO8601(),
-  body('issueDescription').isString(),
   body('estimatedCost').optional().isFloat({ min: 0 }),
-  body('attachments').optional().isArray()
+  body('attachments').optional().isArray(),
+  // For cart orders with multiple services
+  body('services').optional().isArray(),
+  body('services.*.serviceItem').optional().isMongoId(),
+  body('services.*.serviceCategory').optional().isMongoId(),
+  body('services.*.quantity').optional().isInt({ min: 1 }),
+  body('services.*.issueDescription').optional().isString()
 ]);
 
 export const orderIdValidator = validate([

@@ -194,6 +194,7 @@ export const CustomerService = {
       _id: cat._id,
       name: cat.name,
       description: cat.description,
+      heroImage: cat.imageUrl,
       services: serviceItems.filter((item) => String(item.category?._id || item.category) === String(cat._id))
     }));
   },
@@ -260,16 +261,76 @@ export const CustomerService = {
   },
 
   async placeOrder(customerId, payload) {
-    const [customer, serviceItem, address] = await Promise.all([
+    // Validate that either serviceItem or services array is provided
+    const isCartOrder = payload.services && payload.services.length > 0;
+    if (!isCartOrder && !payload.serviceItem) {
+      throw new ApiError(400, 'Either serviceItem or services array must be provided');
+    }
+
+    const [customer, address] = await Promise.all([
       User.findById(customerId),
-      ServiceItem.findById(payload.serviceItem).populate('category'),
       CustomerAddress.findOne({ _id: payload.customerAddressId, customer: customerId })
     ]);
     if (!customer) throw new ApiError(404, 'Customer not found');
-    if (!serviceItem) throw new ApiError(404, 'Service item not found');
     if (!address) throw new ApiError(404, 'Address not found');
 
-    const availability = await this.checkTimeSlotAvailability({ serviceItem: payload.serviceItem, start: payload.preferredStart, end: payload.preferredEnd });
+    // Handle multiple services (cart order) or single service (direct booking)
+    let serviceItems = [];
+    let primaryServiceItem = null;
+    let primaryCategory = null;
+    let totalEstimatedCost = 0;
+    let combinedIssueDescription = '';
+
+    if (isCartOrder) {
+      // Fetch all service items for cart order
+      const serviceIds = payload.services.map(s => s.serviceItem);
+      const fetchedServices = await ServiceItem.find({ _id: { $in: serviceIds } }).populate('category');
+      
+      for (const cartItem of payload.services) {
+        const service = fetchedServices.find(s => s._id.toString() === cartItem.serviceItem);
+        if (!service) throw new ApiError(404, `Service item ${cartItem.serviceItem} not found`);
+        
+        serviceItems.push({
+          serviceCategory: service.category?._id || service.category,
+          serviceItem: service._id,
+          serviceName: service.name,
+          quantity: cartItem.quantity || 1,
+          issueDescription: cartItem.issueDescription || '',
+          estimatedCost: (service.basePrice || 0) * (cartItem.quantity || 1)
+        });
+        
+        totalEstimatedCost += (service.basePrice || 0) * (cartItem.quantity || 1);
+        combinedIssueDescription += `${service.name}: ${cartItem.issueDescription || 'No specific issue'}\n`;
+      }
+      
+      // Use first service as primary for backward compatibility
+      primaryServiceItem = fetchedServices[0];
+      primaryCategory = primaryServiceItem.category?._id || primaryServiceItem.category;
+    } else {
+      // Single service order (existing flow)
+      const serviceItem = await ServiceItem.findById(payload.serviceItem).populate('category');
+      if (!serviceItem) throw new ApiError(404, 'Service item not found');
+      
+      primaryServiceItem = serviceItem;
+      primaryCategory = serviceItem.category?._id || serviceItem.category;
+      totalEstimatedCost = payload.estimatedCost || serviceItem.basePrice || 0;
+      combinedIssueDescription = payload.issueDescription;
+      
+      serviceItems.push({
+        serviceCategory: primaryCategory,
+        serviceItem: serviceItem._id,
+        serviceName: serviceItem.name,
+        quantity: 1,
+        issueDescription: payload.issueDescription,
+        estimatedCost: totalEstimatedCost
+      });
+    }
+
+    const availability = await this.checkTimeSlotAvailability({ 
+      serviceItem: primaryServiceItem._id, 
+      start: payload.preferredStart, 
+      end: payload.preferredEnd 
+    });
     if (!availability.available) {
       throw new ApiError(400, availability.reason || 'Slot unavailable');
     }
@@ -286,8 +347,11 @@ export const CustomerService = {
       },
       customerUser: customerId,
       customerAddress: address._id,
-      serviceCategory: serviceItem.category?._id || serviceItem.category,
-      serviceItem: serviceItem._id,
+      // Primary service for backward compatibility
+      serviceCategory: primaryCategory,
+      serviceItem: primaryServiceItem._id,
+      // All services
+      services: serviceItems,
       scheduledAt: payload.preferredStart,
       timeWindowStart: payload.preferredStart,
       timeWindowEnd: payload.preferredEnd,
@@ -297,15 +361,15 @@ export const CustomerService = {
         start: payload.preferredStart,
         end: payload.preferredEnd
       },
-      issueDescription: payload.issueDescription,
+      issueDescription: combinedIssueDescription.trim(),
       media: (payload.attachments || []).map((url) => ({ url, kind: 'image' })),
-      estimatedCost: payload.estimatedCost,
-      notes: payload.issueDescription,
+      estimatedCost: totalEstimatedCost,
+      notes: combinedIssueDescription.trim(),
       history: [
         {
           action: NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED,
           message: 'Order placed by customer',
-          metadata: { slot: payload.preferredStart }
+          metadata: { slot: payload.preferredStart, servicesCount: serviceItems.length }
         }
       ]
     });
@@ -313,13 +377,14 @@ export const CustomerService = {
     await addHistoryEntry({
           orderId: order._id,
           action: NOTIFICATION_EVENTS.ORDER_CREATED,
-          message: `Order created by customer(${customer.name})`,
-          metadata: { scheduledAt: payload.scheduledAt }
+          message: `Order created by customer(${customer.name}) with ${serviceItems.length} service(s)`,
+          metadata: { scheduledAt: payload.scheduledAt, servicesCount: serviceItems.length }
         });
 
     await notificationService.notifyAdmin(NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED, {
       orderId: order._id,
-      serviceItem: serviceItem.name,
+      serviceItem: primaryServiceItem.name,
+      servicesCount: serviceItems.length,
       scheduledAt: payload.preferredStart
     });
 
@@ -340,11 +405,40 @@ export const CustomerService = {
       .populate('assignedTechnician', 'name mobile');
   },
 
-  async getOrderById(customerId, orderId) {
-    const order = await Order.findOne({ _id: orderId, customerUser: customerId })
+  async getOrderById(customerId, orderId, options = {}) {
+    const query = Order.findOne({ _id: orderId, customerUser: customerId })
       .populate('serviceItem serviceCategory assignedTechnician', 'name email mobile')
       .populate('customerAddress');
+    
+    // Only use lean if not needing to save
+    if (!options.forUpdate) {
+      query.lean();
+    }
+    
+    const order = await query;
     if (!order) throw new ApiError(404, 'Order not found');
+    
+    // For lean queries, add history and map fields
+    if (!options.forUpdate) {
+      // Fetch history from OrderHistory model
+      const historyEntries = await orderHistoryService.listEntries(order._id);
+      order.history = historyEntries.map(entry => ({
+        action: entry.action,
+        message: entry.message,
+        metadata: entry.metadata,
+        createdAt: entry.performedAt
+      }));
+
+      // Map customerApproval.requestedItems to match frontend expectations
+      if (order.customerApproval && order.customerApproval.requestedItems) {
+        order.customerApproval.requestedItems = order.customerApproval.requestedItems.map(item => ({
+          ...item,
+          label: item.serviceName || item.description || item.type,
+          rationale: item.description
+        }));
+      }
+    }
+    
     return order;
   },
 
@@ -365,7 +459,7 @@ export const CustomerService = {
   },
 
   async approveAdditionalItems(customerId, orderId, note) {
-    const order = await this.getOrderById(customerId, orderId);
+    const order = await this.getOrderById(customerId, orderId, { forUpdate: true });
     if (order.customerApproval?.status !== 'pending') {
       throw new ApiError(400, 'No pending approvals');
     }
@@ -383,7 +477,7 @@ export const CustomerService = {
   },
 
   async rejectAdditionalItems(customerId, orderId, note) {
-    const order = await this.getOrderById(customerId, orderId);
+    const order = await this.getOrderById(customerId, orderId, { forUpdate: true });
     if (order.customerApproval?.status !== 'pending') {
       throw new ApiError(400, 'No pending approvals');
     }
@@ -440,21 +534,58 @@ export const CustomerService = {
   async getInvoice(customerId, orderId) {
     const order = await this.getOrderById(customerId, orderId);
     const payment = await Payment.findOne({ order: orderId, customer: customerId, status: PAYMENT_STATUS.SUCCESS });
-    const jobCard = await JobCard.findOne({ order: orderId });
+    const jobCard = await JobCard.findOne({ order: orderId })
+      .populate('extraWork.serviceCategory extraWork.serviceItem', 'name')
+      .populate('sparePartsUsed.part', 'name partNumber');
+
+    // Map additional items from jobCard for frontend consumption
+    let additionalItems = [];
+    if (jobCard) {
+      // Add extra work items
+      if (jobCard.extraWork && jobCard.extraWork.length > 0) {
+        additionalItems = additionalItems.concat(
+          jobCard.extraWork.map(item => ({
+            type: 'extra_work',
+            label: item.serviceItem?.name || item.description,
+            description: item.description,
+            amount: item.amount,
+            category: item.serviceCategory?.name
+          }))
+        );
+      }
+      // Add spare parts
+      if (jobCard.sparePartsUsed && jobCard.sparePartsUsed.length > 0) {
+        additionalItems = additionalItems.concat(
+          jobCard.sparePartsUsed.map(item => ({
+            type: 'spare_part',
+            label: item.part?.name || 'Spare Part',
+            description: `Qty: ${item.quantity}`,
+            amount: item.quantity * item.unitPrice,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            partNumber: item.part?.partNumber
+          }))
+        );
+      }
+    }
+
     return {
       order,
       payment,
-      jobCard,
+      jobCard: jobCard ? {
+        ...jobCard.toObject(),
+        additionalItems
+      } : null,
       totals: {
-        estimate: jobCard?.estimateAmount || order.estimatedCost,
+        estimate: jobCard?.estimateAmount || order.estimatedCost || 0,
         additional: jobCard?.additionalCharges || 0,
-        final: jobCard?.finalAmount || payment?.amount || order.estimatedCost
+        final: jobCard?.finalAmount || payment?.amount || order.estimatedCost || 0
       }
     };
   },
 
   async rateOrder(customerId, orderId, payload) {
-    const order = await this.getOrderById(customerId, orderId);
+    const order = await this.getOrderById(customerId, orderId, { forUpdate: true });
     order.customerExperience = {
       rating: payload.rating,
       comment: payload.comment,
@@ -462,5 +593,45 @@ export const CustomerService = {
     };
     await order.save();
     return order.customerExperience;
+  },
+
+  async cancelOrder(customerId, orderId, reason) {
+    const order = await this.getOrderById(customerId, orderId, { forUpdate: true });
+    
+    // Only allow cancellation for pending or confirmed orders
+    if (![ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED].includes(order.status)) {
+      throw new ApiError(400, 'Order cannot be cancelled at this stage');
+    }
+
+    order.status = ORDER_STATUS.CANCELLED;
+    order.cancelledReason = reason || 'Cancelled by customer';
+    order.cancelledAt = new Date();
+    await order.save();
+
+    await addHistoryEntry({
+      orderId: order._id,
+      action: 'cancelled',
+      message: `Order cancelled by customer${reason ? `: ${reason}` : ''}`,
+      metadata: { reason, cancelledBy: 'customer' },
+      performedBy: customerId
+    });
+
+    // Notify admin about cancellation
+    await notificationService.notifyAdmins(NOTIFICATION_EVENTS.ORDER_STATUS_CHANGED, {
+      orderId: order._id,
+      status: ORDER_STATUS.CANCELLED,
+      reason
+    });
+
+    // Notify technician if assigned
+    if (order.assignedTechnician) {
+      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.ORDER_STATUS_CHANGED, {
+        orderId: order._id,
+        status: ORDER_STATUS.CANCELLED,
+        reason
+      });
+    }
+
+    return order;
   }
 };
