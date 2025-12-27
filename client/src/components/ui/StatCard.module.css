@@ -9,15 +9,15 @@
 }
 
 .brand {
-  background: linear-gradient(135deg, var(--brand-500), var(--brand-800));
+  background: linear-gradient(135deg, #111111, #1e1e1e);
 }
 
 .teal {
-  background: linear-gradient(135deg, #1fd1b5, #0a9e8d);
+  background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
 }
 
 .amber {
-  background: linear-gradient(135deg, #f4b740, #e48b00);
+  background: linear-gradient(135deg, #2f2f2f, #1a1a1a);
 }
 
 .label {

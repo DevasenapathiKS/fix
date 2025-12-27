@@ -47,15 +47,15 @@ export const LoginPage = () => {
     <div className={styles.authLayout}>
       <div className={styles.hero}>
         <p className={styles.subtitle}>Welcome back</p>
-        <h1>Experience white-glove service, on your schedule.</h1>
+        <h1>Sign in to your client workspace.</h1>
         <p>
-          Track orders, approvals, and payments in one place. Our elite technician network keeps your home running like a flagship workspace.
+          Review visits, approvals, and payments from a single console with concierge support on standby.
         </p>
       </div>
       <section className={styles.panel}>
         <div>
           <h2>Client sign in</h2>
-          <p className={styles.subtitle}>Secure login using your registered email or phone.</p>
+          <p className={styles.subtitle}>Use your registered email or phone to continue.</p>
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit(onSubmit)}>

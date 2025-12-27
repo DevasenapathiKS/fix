@@ -29,7 +29,7 @@ export default function ServicesPage() {
         setLoading(true);
         setError(null);
         const data = await customerApi.listServices();
-        setCategories(data);
+        setCategories(Array.isArray(data) ? data : []);
       } catch (err) {
         setError('Failed to load services. Please try again.');
         toast.error('Failed to load services');
@@ -68,9 +68,10 @@ export default function ServicesPage() {
   };
 
   const filteredCategories = useMemo(() => {
-    if (!keyword) return categories;
+    const safeCategories = Array.isArray(categories) ? categories : [];
+    if (!keyword) return safeCategories;
     const lower = keyword.toLowerCase();
-    return categories
+    return safeCategories
       .map((category) => ({
         ...category,
         services: category.services.filter((service) => 
@@ -87,7 +88,7 @@ export default function ServicesPage() {
     setError(null);
     setLoading(true);
     customerApi.listServices()
-      .then(data => setCategories(data))
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
       .catch(() => {
         setError('Failed to load services. Please try again.');
         toast.error('Failed to load services');

@@ -1,5 +1,9 @@
 .searchRow {
   margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .categoryStack {
@@ -9,33 +13,36 @@
 }
 
 .categoryHeader {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 
 .categoryDescription {
-  margin-top: -0.5rem;
+  margin-top: -0.35rem;
   color: var(--text-muted);
+  max-width: 720px;
 }
 
 .serviceGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.1rem;
 }
 
 .serviceCard {
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(12, 12, 12, 0.08);
   border-radius: 18px;
-  padding: 1rem;
+  padding: 1.1rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  background: linear-gradient(180deg, #ffffff, #f7f7f7);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
 }
 
 .serviceName {
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .serviceMeta {
@@ -57,8 +64,8 @@
   gap: 0.35rem;
   padding: 0.2rem 0.65rem;
   border-radius: 999px;
-  background: rgba(42, 100, 216, 0.12);
-  color: var(--brand-700);
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--brand-800);
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
 }

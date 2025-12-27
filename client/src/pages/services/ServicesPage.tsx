@@ -33,8 +33,8 @@ export const ServicesPage = () => {
   return (
     <div>
       <PageHeader
-        title="Choose a premium service"
-        subtitle="Every visit comes with Fixzep's 10-point safety assurance."
+        title="Services tailored for premium clients"
+        subtitle="Curated categories with vetted technicians, transparent estimates, and white-glove coordination."
         actions={<Button onClick={() => navigate('/booking')}>Book instantly</Button>}
       />
 

@@ -116,7 +116,7 @@ export const BookingPage = () => {
     <div>
       <PageHeader
         title="Book a concierge visit"
-        subtitle="We triage automatically, assign the right craftsman, and keep you notified end-to-end."
+        subtitle="Tell us the issue, pick a slot, and we’ll dispatch the right crew with live updates."
       />
 
       <form className={styles.form} onSubmit={handleSubmit(onSubmit)}>
@@ -204,7 +204,7 @@ export const BookingPage = () => {
           <div>
             <p className={styles.summaryTitle}>Concierge assurance</p>
             <p className={styles.summaryCopy}>
-              <ShieldCheck size={16} /> Technician background verification, live ETA tracking, and digital approvals included.
+              <ShieldCheck size={16} /> Verified technicians, protected entry, live ETA tracking, and digital approvals.
             </p>
           </div>
           <Button type="submit" loading={mutation.isPending}>

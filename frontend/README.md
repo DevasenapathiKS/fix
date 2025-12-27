@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Visit http://localhost:5173 and log in with an admin user from the backend API.
+Visit http://57.159.28.81:5173 and log in with an admin user from the backend API.
 
 ## Features
 - JWT login with persistent session via `AuthContext`.
@@ -46,7 +46,7 @@ src/
 ```
 
 ## Environment
-- `VITE_API_URL` — backend base URL (defaults to http://localhost:4000/api if unset)
+- `VITE_API_URL` — backend base URL (defaults to http://57.159.28.81:4000/api if unset)
 
 ## Production Build
 ```bash

@@ -1,3 +1,13 @@
 .app-root {
   min-height: 100vh;
+  padding: 1.25rem;
+  background: radial-gradient(circle at 12% 18%, rgba(0, 0, 0, 0.06), transparent 32%),
+    radial-gradient(circle at 88% 12%, rgba(0, 0, 0, 0.05), transparent 30%),
+    linear-gradient(180deg, #fafafa 0%, #f4f4f4 100%);
+}
+
+@media (max-width: 768px) {
+  .app-root {
+    padding: 0.75rem;
+  }
 }

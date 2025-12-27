@@ -73,7 +73,7 @@ export const OrderDetailPage = () => {
     <div>
       <PageHeader
         title={order.serviceItem?.name ?? 'Order detail'}
-        subtitle={`Order #${order._id}`}
+        subtitle={`Order #${order._id} · Live status, approvals, and invoice in one place.`}
         actions={<Button onClick={() => navigate('/orders')}>Back to orders</Button>}
       />
 

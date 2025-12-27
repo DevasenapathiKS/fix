@@ -1,13 +1,14 @@
 .layout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .statusRow {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+  padding: 0.25rem 0;
 }
 
 .label {
@@ -37,6 +38,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.95rem;
+  padding: 0.35rem 0;
 }
 
 .reviewForm {

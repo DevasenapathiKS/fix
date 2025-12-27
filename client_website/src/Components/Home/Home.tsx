@@ -113,7 +113,7 @@ export default function HomeServices() {
         setLoading(true);
         const remoteCategories = await customerApi.listCategories();
         if (!cancelled) {
-          setCategories(remoteCategories);
+          setCategories(Array.isArray(remoteCategories) ? remoteCategories : []);
           setError(null);
         }
       } catch (err) {
@@ -194,7 +194,10 @@ export default function HomeServices() {
     };
   }, [searchTerm]);
 
-  const visibleCategories = useMemo(() => (categories.length ? categories : fallbackCategories), [categories]);
+  const visibleCategories = useMemo(() => {
+    const safe = Array.isArray(categories) ? categories : [];
+    return safe.length ? safe : fallbackCategories;
+  }, [categories]);
 
   const spotlightServices = useMemo(() => {
     if (searchTerm.trim().length >= 3) {

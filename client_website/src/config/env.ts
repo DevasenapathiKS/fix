@@ -1,4 +1,4 @@
-const fallbackApi = 'http://134.209.148.119//api';
+const fallbackApi = 'http://57.159.28.81:4000//api';
 
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return fallbackApi;

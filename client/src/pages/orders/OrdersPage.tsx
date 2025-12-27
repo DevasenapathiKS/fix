@@ -43,8 +43,8 @@ export const OrdersPage = () => {
   return (
     <div>
       <PageHeader
-        title="Job history"
-        subtitle="Search every Fixzep engagement, approvals, and payments."
+        title="Work orders"
+        subtitle="Search every visit, approval, and payment—kept in one organized log."
         actions={<Button onClick={() => navigate('/booking')}>New booking</Button>}
       />
 
