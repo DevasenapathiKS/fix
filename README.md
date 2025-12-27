@@ -11,8 +11,8 @@ npm run dev
 ```
 
 - Update `.env` with Mongo URI, JWT secret, and notification topics.
-- Dev server runs on `http://57.159.28.81:4000` by default.
-- Interactive Swagger UI available at `http://57.159.28.81:4000/docs` (raw spec at `/docs.json`).
+- Dev server runs on `http://57.159.28.81` by default.
+- Interactive Swagger UI available at `http://57.159.28.81/docs` (raw spec at `/docs.json`).
 
 ## 2. Folder Structure
 

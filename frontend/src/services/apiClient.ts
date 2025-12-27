@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders } from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://57.159.28.81:4000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://57.159.28.81/api',
   timeout: 15_000
 });
 

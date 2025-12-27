@@ -46,7 +46,7 @@ src/
 ```
 
 ## Environment
-- `VITE_API_URL` — backend base URL (defaults to http://57.159.28.81:4000/api if unset)
+- `VITE_API_URL` — backend base URL (defaults to http://57.159.28.81/api if unset)
 
 ## Production Build
 ```bash

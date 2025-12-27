@@ -11,13 +11,13 @@ cp .env.example .env        # optional helper - see env section
 npm run dev
 ```
 
-The portal boots on `http://57.159.28.81:5173`. Point `VITE_API_URL` to the running Fixzep backend (defaults to `http://57.159.28.81:4000/api`).
+The portal boots on `http://57.159.28.81:5173`. Point `VITE_API_URL` to the running Fixzep backend (defaults to `http://57.159.28.81/api`).
 
 ## 2. Environment
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `VITE_API_URL` | Base URL for Fixzep backend REST API | `http://57.159.28.81:4000/api` |
+| `VITE_API_URL` | Base URL for Fixzep backend REST API | `http://57.159.28.81/api` |
 
 Environment variables must be prefixed with `VITE_` for Vite to expose them at build time.
 
