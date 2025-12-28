@@ -1,4 +1,4 @@
-const fallbackApi = 'http://57.159.28.81//api';
+const fallbackApi = 'https://admin.eopsys.xyz/api';
 
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return fallbackApi;
