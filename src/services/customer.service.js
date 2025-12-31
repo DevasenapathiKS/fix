@@ -240,10 +240,28 @@ export const CustomerService = {
       return { available: false, reason: 'No template matches that window' };
     }
 
-    const technicianProfiles = await TechnicianProfile.find({ serviceItems: serviceItem }).select('user');
+    // First try to find technicians with the specific service item
+    let technicianProfiles = await TechnicianProfile.find({ serviceItems: serviceItem }).select('user');
+    
+    // If no technicians found for specific service, try service category
     if (technicianProfiles.length === 0) {
-      return { available: false, reason: 'No technicians for this service' };
+      const service = await ServiceItem.findById(serviceItem).select('category');
+      if (service?.category) {
+        technicianProfiles = await TechnicianProfile.find({ serviceCategories: service.category }).select('user');
+      }
     }
+    
+    // If still no technicians found, allow order to proceed (admin will assign manually)
+    // Orders are created with PENDING_ASSIGNMENT status anyway
+    if (technicianProfiles.length === 0) {
+      return {
+        available: true,
+        candidateTechnician: null,
+        capacity: template.capacity,
+        requiresManualAssignment: true
+      };
+    }
+    
     const technicianIds = technicianProfiles.map((profile) => profile.user);
 
     const overlapping = await TechnicianCalendar.find({
@@ -253,10 +271,13 @@ export const CustomerService = {
     }).select('technician');
     const busyIds = new Set(overlapping.map((entry) => String(entry.technician)));
     const availableTechnician = technicianIds.find((id) => !busyIds.has(String(id)));
+    
+    // If all technicians are busy, still allow order (admin can reassign or reschedule)
     return {
-      available: Boolean(availableTechnician),
+      available: true,
       candidateTechnician: availableTechnician || null,
-      capacity: template.capacity
+      capacity: template.capacity,
+      requiresManualAssignment: !availableTechnician
     };
   },
 

@@ -87,6 +87,11 @@ function App() {
     <>
       <ToastContainer />
       <Routes>
+        {/* Public auth pages (no app shell to reduce distractions) */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Main application shell */}
         <Route element={<Layout />}>
           <Route index element={<HomeServices />} />
           <Route path="services" element={<ServicesPage />} />
@@ -97,8 +102,6 @@ function App() {
           <Route path="addresses" element={<AddressesPage />} />
           <Route path="cart" element={<CartPage />} />
           <Route path="contact" element={<ContactPage />} />
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>

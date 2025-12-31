@@ -1,12 +1,23 @@
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 32px);
+  background:
+    radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.09), transparent 32%),
+    radial-gradient(circle at 85% 10%, rgba(124, 58, 237, 0.08), transparent 30%),
+    linear-gradient(180deg, #f8fafc, #eef2f8);
+}
+
 .auth-shell {
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
-  padding: clamp(16px, 3vw, 24px);
+  padding: clamp(20px, 4vw, 28px);
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
 }
 
 .auth-shell h1 {
@@ -43,12 +54,12 @@
   padding: 12px;
   border-radius: 12px;
   border: none;
-  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  background: linear-gradient(120deg, #0f172a, #1f2937);
   color: #ffffff;
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
-  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
 }
 
 .auth-form button:disabled {

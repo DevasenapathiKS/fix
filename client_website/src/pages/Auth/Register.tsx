@@ -48,7 +48,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <section className="page">
+    <section className="auth-page">
       <div className="auth-shell">
         <h1>Create your account</h1>
         <p>Book trusted technicians, manage addresses, and track orders.</p>

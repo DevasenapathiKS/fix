@@ -38,7 +38,7 @@ export default function LoginPage() {
   };
 
   return (
-    <section className="page">
+    <section className="auth-page">
       <div className="auth-shell">
         <h1>Welcome back</h1>
         <p>Access your Fixzep account to book and track services.</p>
