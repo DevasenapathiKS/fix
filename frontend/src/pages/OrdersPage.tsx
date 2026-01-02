@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { OrdersAPI, TechniciansAPI, TimeSlotsAPI, CustomersAPI, CatalogAPI, SparePartsAPI } from '../services/adminApi';
 import type {
@@ -110,18 +111,70 @@ const buildAddress = (customer?: AddressLike) => {
     .join(', ');
 };
 
+// Calendar helper functions
+const getCalendarDays = (startDate: Date, numDays = 7): Date[] => {
+  const days: Date[] = [];
+  for (let i = 0; i < numDays; i++) {
+    const day = new Date(startDate);
+    day.setDate(startDate.getDate() + i);
+    days.push(day);
+  }
+  return days;
+};
+
+const formatDateShort = (date: Date) => {
+  return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const isSlotBlocked = (
+  date: Date,
+  slotStart: string,
+  slotEnd: string,
+  scheduleEntries: TechnicianScheduleEntry[]
+): TechnicianScheduleEntry | null => {
+  const [startHour, startMin] = slotStart.split(':').map(Number);
+  const [endHour, endMin] = slotEnd.split(':').map(Number);
+
+  const slotStartTime = new Date(date);
+  slotStartTime.setHours(startHour, startMin, 0, 0);
+
+  const slotEndTime = new Date(date);
+  slotEndTime.setHours(endHour, endMin, 0, 0);
+
+  // Check if any schedule entry overlaps with this slot
+  for (const entry of scheduleEntries) {
+    const entryStart = new Date(entry.start);
+    const entryEnd = new Date(entry.end);
+
+    // Overlap check: entry.start < slotEnd AND entry.end > slotStart
+    if (entryStart < slotEndTime && entryEnd > slotStartTime) {
+      return entry;
+    }
+  }
+  return null;
+};
+
+const buildSlotDateTime = (date: Date, time: string): Date => {
+  const [hour, min] = time.split(':').map(Number);
+  const result = new Date(date);
+  result.setHours(hour, min, 0, 0);
+  return result;
+};
+
 export const OrdersPage = () => {
-  const [status, setStatus] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [createOrderModal, setCreateOrderModal] = useState(false);
   const [assignModal, setAssignModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [rescheduleModal, setRescheduleModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
   const [jobCardModal, setJobCardModal] = useState<{ order: Order | null; open: boolean }>({ order: null, open: false });
+  const [pendingSelectedOrderId, setPendingSelectedOrderId] = useState<string | null>(() => searchParams.get('selected'));
   const [imageViewer, setImageViewer] = useState<{ open: boolean; url: string; name: string }>({ open: false, url: '', name: '' });
   const [imageZoom, setImageZoom] = useState(100);
   const [assigningTech, setAssigningTech] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  
+
   // Create order form state
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerData, setCustomerData] = useState<CustomerSummary | null>(null);
@@ -140,13 +193,22 @@ export const OrdersPage = () => {
   const [orderEndTime, setOrderEndTime] = useState('11:00');
   const [issueDescription, setIssueDescription] = useState('');
   const [checkingCustomer, setCheckingCustomer] = useState(false);
-  const [scheduleDrawer, setScheduleDrawer] = useState<{ open: boolean; technicianId: string | null; name: string }>(
-    {
-      open: false,
-      technicianId: null,
-      name: ''
-    }
-  );
+  const [scheduleDrawer, setScheduleDrawer] = useState<{ open: boolean; technicianId: string | null; name: string }>({
+    open: false,
+    technicianId: null,
+    name: ''
+  });
+  const [calendarStartDate, setCalendarStartDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [selectedCalendarSlot, setSelectedCalendarSlot] = useState<{
+    date: Date;
+    startTime: string;
+    endTime: string;
+    label: string;
+  } | null>(null);
   const [jobStatusChoice, setJobStatusChoice] = useState('');
   const [paymentStatusChoice, setPaymentStatusChoice] = useState<PaymentStatusValue | ''>('');
   const [followUpReason, setFollowUpReason] = useState('');
@@ -154,16 +216,16 @@ export const OrdersPage = () => {
   const [uploadedDocuments, setUploadedDocuments] = useState<FollowUpAttachment[]>([]);
   const [activityNote, setActivityNote] = useState('');
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
-  
+
   // Spare parts form state
   const [showAddSparePart, setShowAddSparePart] = useState(false);
   const [selectedSparePartId, setSelectedSparePartId] = useState('');
   const [sparePartQuantity, setSparePartQuantity] = useState('');
-  
+
   // Additional service form state
   const [showAddService, setShowAddService] = useState(false);
   const [selectedAdditionalServiceId, setSelectedAdditionalServiceId] = useState('');
-  
+
   // Edit customer address state
   const [editingAddress, setEditingAddress] = useState(false);
   const [selectedEditAddressId, setSelectedEditAddressId] = useState('');
@@ -174,15 +236,17 @@ export const OrdersPage = () => {
   const [editState, setEditState] = useState('');
   const [editPostalCode, setEditPostalCode] = useState('');
   const [additionalServiceQuantity, setAdditionalServiceQuantity] = useState('1');
-  
+
   const queryClient = useQueryClient();
 
   const closeAssignModal = () => {
     setAssignModal({ order: null, open: false });
     setScheduleDrawer({ open: false, technicianId: null, name: '' });
+    setSelectedCalendarSlot(null);
   };
 
   const openSchedulePanel = (technician: TechnicianCandidate) => {
+    setSelectedCalendarSlot(null); // Clear any previously selected slot
     setScheduleDrawer({
       open: true,
       technicianId: technician.id,
@@ -199,6 +263,35 @@ export const OrdersPage = () => {
     queryKey: ['orders', status],
     queryFn: () => OrdersAPI.list({ status: status || undefined })
   });
+
+  // Handle URL query params for deep linking from dashboard
+  useEffect(() => {
+    if (pendingSelectedOrderId && orders.length > 0 && !isLoading) {
+      const order = orders.find((o) => o._id === pendingSelectedOrderId);
+      if (order) {
+        setJobCardModal({ order, open: true });
+      }
+      // Clear the pending selection after attempting to open
+      setPendingSelectedOrderId(null);
+      // Remove 'selected' from URL without triggering navigation
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('selected');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [orders, pendingSelectedOrderId, isLoading, searchParams, setSearchParams]);
+
+  // Sync status filter to URL
+  const handleStatusChange = (newStatus: string) => {
+    setStatus(newStatus);
+    const newParams = new URLSearchParams(searchParams);
+    if (newStatus) {
+      newParams.set('status', newStatus);
+    } else {
+      newParams.delete('status');
+    }
+    newParams.delete('selected'); // Clear selection when changing filter
+    setSearchParams(newParams, { replace: true });
+  };
 
   const { data: categories = [] } = useQuery<ServiceCategory[]>({
     queryKey: ['categories'],
@@ -231,19 +324,24 @@ export const OrdersPage = () => {
   });
 
   const { data: scheduleEntries = [], isFetching: loadingSchedule } = useQuery<TechnicianScheduleEntry[]>({
-    queryKey: ['technician-schedule', scheduleDrawer.technicianId],
-    queryFn: () =>
-      TechniciansAPI.schedule(scheduleDrawer.technicianId!, {
-        start: new Date().toISOString(),
-        end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      }),
+    queryKey: ['technician-schedule', scheduleDrawer.technicianId, calendarStartDate.toISOString()],
+    queryFn: () => {
+      // Calculate the end date (7 days from calendarStartDate)
+      const endDate = new Date(calendarStartDate);
+      endDate.setDate(endDate.getDate() + 7);
+      
+      return TechniciansAPI.schedule(scheduleDrawer.technicianId!, {
+        start: calendarStartDate.toISOString(),
+        end: endDate.toISOString()
+      });
+    },
     enabled: scheduleDrawer.open && Boolean(scheduleDrawer.technicianId)
   });
 
   const { data: timeSlots = [], isFetching: loadingTimeSlots } = useQuery<TimeSlotTemplate[]>({
     queryKey: ['time-slots'],
     queryFn: () => TimeSlotsAPI.list(),
-    enabled: rescheduleModal.open
+    enabled: rescheduleModal.open || scheduleDrawer.open
   });
 
   const {
@@ -617,8 +715,8 @@ export const OrdersPage = () => {
     const totalAmount = (selectedService.basePrice || 0) * quantity;
     addAdditionalServiceMutation.mutate({
       orderId: jobCardModal.order._id,
-      service: { 
-        description: `${selectedService.name} (x${quantity})`, 
+      service: {
+        description: `${selectedService.name} (x${quantity})`,
         amount: totalAmount,
         serviceItemId: selectedAdditionalServiceId
       }
@@ -676,6 +774,23 @@ export const OrdersPage = () => {
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Assignment failed'),
     onSettled: () => setAssigningTech(null)
+  });
+
+  // Assign technician with schedule update (reschedule + assign in sequence)
+  const assignWithSlotMutation = useMutation({
+    mutationFn: async ({ orderId, technicianId, newStart, newEnd }: { orderId: string; technicianId: string; newStart: string; newEnd: string }) => {
+      // First reschedule the order to the new time slot
+      await OrdersAPI.reschedule(orderId, { newStart, newEnd });
+      // Then assign the technician
+      return OrdersAPI.assign(orderId, technicianId);
+    },
+    onSuccess: () => {
+      toast.success('Order rescheduled and technician assigned!');
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['technician-schedule'] });
+      closeAssignModal();
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to assign with new slot')
   });
 
   const rescheduleMutation = useMutation({
@@ -823,10 +938,11 @@ export const OrdersPage = () => {
     mutationFn: (phone: string) => CustomersAPI.findByPhone(phone),
     onSuccess: (data) => {
       if (data) {
+        console.log(data, 'dataaaaaaaaa');
         setCustomerData(data);
         setCustomerName(data.name || '');
         setCustomerEmail(data.email || '');
-        
+
         // Set default address or first address
         const defaultAddr = data.addresses?.find(a => a.isDefault) || data.addresses?.[0];
         if (defaultAddr) {
@@ -843,7 +959,7 @@ export const OrdersPage = () => {
           setState('');
           setPostalCode(data.postalCode || '');
         }
-        
+
         toast.success('Customer found!');
       } else {
         setCustomerData(null);
@@ -923,6 +1039,7 @@ export const OrdersPage = () => {
     }
   };
 
+
   const handleCheckCustomer = () => {
     if (!customerPhone.trim()) {
       toast.error('Please enter phone number');
@@ -937,19 +1054,19 @@ export const OrdersPage = () => {
       toast.error('Please fill all required fields');
       return;
     }
-    
+
     // Validate address - either selected or manually filled
     const hasSelectedAddress = selectedAddressId;
     const hasManualAddress = addressLine1 && city && state;
-    
+
     if (!hasSelectedAddress && !hasManualAddress) {
       toast.error('Please select an address or fill in address details');
       return;
     }
-    
+
     const scheduledDate = new Date(`${orderDate}T${orderStartTime}`);
     const endDate = new Date(`${orderDate}T${orderEndTime}`);
-    
+
     const orderPayload: any = {
       customerId: customerData?.id,
       serviceItem: selectedService,
@@ -959,7 +1076,7 @@ export const OrdersPage = () => {
       issueDescription,
       slotLabel: `${orderStartTime} - ${orderEndTime}`
     };
-    
+
     // Add address ID if selected, otherwise send address data to create new one
     if (selectedAddressId) {
       orderPayload.addressId = selectedAddressId;
@@ -972,7 +1089,7 @@ export const OrdersPage = () => {
         postalCode
       };
     }
-    
+
     createOrderMutation.mutate(orderPayload);
   };
 
@@ -998,7 +1115,7 @@ export const OrdersPage = () => {
         </div>
         <div className="flex gap-3">
           <Button onClick={() => setCreateOrderModal(true)}>+ Create Order</Button>
-          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select value={status} onChange={(e) => handleStatusChange(e.target.value)}>
             {statusFilterOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -1097,7 +1214,7 @@ export const OrdersPage = () => {
         </div>
       </Card>
 
-      <Modal open={assignModal.open} onClose={closeAssignModal} title="Assign Technician">
+      <Modal open={assignModal.open} onClose={() => { if (!scheduleDrawer.open) closeAssignModal(); }} title="Assign Technician">
         <p className="text-sm text-slate-500">
           Technicians shown are certified for{' '}
           <span className="font-semibold text-slate-900">{assignModal.order?.serviceItem?.name}</span> and reflect real-time slot availability.
@@ -1379,10 +1496,10 @@ export const OrdersPage = () => {
                   <h4 className="mt-2 text-lg font-semibold text-slate-900">{jobCardDetail.order.customer.name}</h4>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.phone}</p>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.email || 'Email not provided'}</p>
-                  
+
                   {editingAddress ? (
                     <div className="mt-3 space-y-3">
-                      {customerData?.addresses && customerData.addresses.length > 0 && !isAddingNewAddress ? (
+                      {customerData?.addresses && customerData?.addresses?.length > 0 && !isAddingNewAddress ? (
                         <>
                           <Select
                             label="Select Address"
@@ -1424,7 +1541,7 @@ export const OrdersPage = () => {
                           </button>
                         </>
                       ) : null}
-                      
+
                       {(isAddingNewAddress || !customerData?.addresses?.length || selectedEditAddressId) && (
                         <>
                           {isAddingNewAddress && customerData?.addresses && customerData.addresses.length > 0 && (
@@ -1477,7 +1594,7 @@ export const OrdersPage = () => {
                           />
                         </>
                       )}
-                      
+
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -1490,15 +1607,15 @@ export const OrdersPage = () => {
                               toast.error('Please fill required address fields');
                               return;
                             }
-                            const customerId = typeof jobCardDetail.order.customer === 'string' 
-                              ? jobCardDetail.order.customer 
+                            const customerId = typeof jobCardDetail.order.customer === 'string'
+                              ? jobCardDetail.order.customer
                               : jobCardDetail.order.customer._id || jobCardDetail.order.customer._id;
-                            
+
                             if (!customerId) {
                               toast.error('Customer ID not found');
                               return;
                             }
-                            
+
                             updateCustomerAddressMutation.mutate({
                               customerId,
                               addressId: selectedEditAddressId || undefined,
@@ -1560,7 +1677,7 @@ export const OrdersPage = () => {
                                 className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
                               >
                                 {doc.kind === 'image' ? (
-                                  <div 
+                                  <div
                                     className="aspect-square cursor-pointer"
                                     onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
                                   >
@@ -1626,7 +1743,7 @@ export const OrdersPage = () => {
                                 className="relative rounded-xl border border-dashed border-slate-200 bg-slate-50 overflow-hidden group"
                               >
                                 {doc.kind === 'image' ? (
-                                  <div 
+                                  <div
                                     className="aspect-square cursor-pointer"
                                     onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
                                   >
@@ -1722,7 +1839,7 @@ export const OrdersPage = () => {
                       </Button>
                     )}
                   </div>
-                  
+
                   {showAddService && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <Select
@@ -1750,7 +1867,7 @@ export const OrdersPage = () => {
                         <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
                           <span className="font-semibold">Total: </span>
                           {formatCurrency(
-                            (allServiceItems.find(s => s._id === selectedAdditionalServiceId)?.basePrice || 0) * 
+                            (allServiceItems.find(s => s._id === selectedAdditionalServiceId)?.basePrice || 0) *
                             parseFloat(additionalServiceQuantity || '1')
                           )}
                         </div>
@@ -1764,7 +1881,7 @@ export const OrdersPage = () => {
                       </Button>
                     </div>
                   )}
-                  
+
                   {jobCard?.extraWork && jobCard.extraWork.length > 0 ? (
                     <ul className="mt-3 space-y-2 text-sm">
                       {jobCard.extraWork.map((work, idx) => (
@@ -1959,11 +2076,10 @@ export const OrdersPage = () => {
                         />
                         <label
                           htmlFor="followup-file-input"
-                          className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition cursor-pointer ${
-                            isOrderCompleted 
-                              ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed' 
-                              : 'border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'
-                          }`}
+                          className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition cursor-pointer ${isOrderCompleted
+                            ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
+                            : 'border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'
+                            }`}
                         >
                           <span className="font-semibold text-slate-900">Drag & drop files</span>
                           <span className="text-xs text-slate-500">or click to browse</span>
@@ -1972,8 +2088,8 @@ export const OrdersPage = () => {
                       {followUpAttachments.length > 0 && (
                         <div className="grid grid-cols-2 gap-3">
                           {followUpAttachments.map((attachment, idx) => (
-                            <div 
-                              key={`${attachment.name || 'attachment'}-${idx}`} 
+                            <div
+                              key={`${attachment.name || 'attachment'}-${idx}`}
                               className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
                             >
                               {attachment.kind === 'video' ? (
@@ -1985,13 +2101,13 @@ export const OrdersPage = () => {
                                   />
                                 </div>
                               ) : (
-                                <div 
+                                <div
                                   className="aspect-square cursor-pointer"
                                   onClick={() => setImageViewer({ open: true, url: attachment.url, name: attachment.name || `Evidence ${idx + 1}` })}
                                 >
-                                  <img 
-                                    src={attachment.url} 
-                                    alt={attachment.name || 'Attachment'} 
+                                  <img
+                                    src={attachment.url}
+                                    alt={attachment.name || 'Attachment'}
                                     className="w-full h-full object-cover hover:opacity-90 transition-opacity"
                                   />
                                 </div>
@@ -2072,7 +2188,7 @@ export const OrdersPage = () => {
                       </Button>
                     )}
                   </div>
-                  
+
                   {showAddSparePart && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <Select
@@ -2100,7 +2216,7 @@ export const OrdersPage = () => {
                         <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
                           <span className="font-semibold">Total: </span>
                           {formatCurrency(
-                            (allSpareparts.find(p => p._id === selectedSparePartId)?.unitPrice || 0) * 
+                            (allSpareparts.find(p => p._id === selectedSparePartId)?.unitPrice || 0) *
                             parseFloat(sparePartQuantity || '1')
                           )}
                         </div>
@@ -2114,7 +2230,7 @@ export const OrdersPage = () => {
                       </Button>
                     </div>
                   )}
-                  
+
                   {spareParts.length > 0 && (
                     <div className="mt-3 overflow-x-auto">
                       <table className="min-w-full text-left text-sm">
@@ -2211,36 +2327,341 @@ export const OrdersPage = () => {
 
       <Drawer
         open={scheduleDrawer.open}
-        onClose={() => setScheduleDrawer({ open: false, technicianId: null, name: '' })}
-        title={`Schedule · ${scheduleDrawer.name || ''}`}
+        onClose={() => {
+          closeAssignModal();
+        }}
+        title={`Calendar · ${scheduleDrawer.name || ''}`}
+        widthClassName="w-screen max-w-2xl"
       >
-        <p className="text-sm text-slate-500">Upcoming commitments for the next 7 days.</p>
-        {loadingSchedule && <p className="mt-4 text-sm text-slate-400">Loading schedule…</p>}
-        {!loadingSchedule && scheduleEntries.length === 0 && (
-          <p className="mt-4 text-sm text-slate-400">No blocks in this window. Technician is fully available.</p>
+        {assignModal.order && (
+          <div className="mb-4 space-y-3">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold">Assigning to order</p>
+              <p className="text-sm text-blue-900 mt-1">
+                {assignModal.order.serviceItem?.name} · {assignModal.order.customer?.name}
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                Current slot: {formatDateTime(assignModal.order.timeWindowStart)} → {formatDateTime(assignModal.order.timeWindowEnd)}
+              </p>
+            </div>
+
+            {/* Assign Button - Always visible */}
+            <div className={`rounded-xl border-2 p-4 ${selectedCalendarSlot ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  {selectedCalendarSlot ? (
+                    <>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600 font-semibold">Selected time slot</p>
+                      <p className="text-sm font-semibold text-emerald-900 mt-1">
+                        {selectedCalendarSlot.label || `${selectedCalendarSlot.startTime} - ${selectedCalendarSlot.endTime}`}
+                      </p>
+                      <p className="text-xs text-emerald-700 mt-0.5">
+                        {selectedCalendarSlot.date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        {selectedCalendarSlot.startTime} → {selectedCalendarSlot.endTime}
+                      </p>
+                      {(() => {
+                        const orderStart = assignModal.order?.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
+                        const orderEnd = assignModal.order?.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
+                        const selectedStart = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.startTime);
+                        const selectedEnd = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.endTime);
+                        const isSameSlot = orderStart && orderEnd &&
+                          selectedStart.getTime() === orderStart.getTime() &&
+                          selectedEnd.getTime() === orderEnd.getTime();
+
+                        return isSameSlot ? (
+                          <p className="text-xs text-emerald-800 mt-2 font-medium">✓ Same as current order slot</p>
+                        ) : (
+                          <p className="text-xs text-amber-600 mt-2 font-medium">⚠ Order will be rescheduled to this slot</p>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">No slot selected</p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        👆 Select an available time slot from the calendar below
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => {
+                      if (!scheduleDrawer.technicianId || !assignModal.order || !selectedCalendarSlot) return;
+
+                      const selectedStart = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.startTime);
+                      const selectedEnd = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.endTime);
+
+                      const orderStart = assignModal.order.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
+                      const orderEnd = assignModal.order.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
+
+                      const isSameSlot = orderStart && orderEnd &&
+                        selectedStart.getTime() === orderStart.getTime() &&
+                        selectedEnd.getTime() === orderEnd.getTime();
+
+                      if (isSameSlot) {
+                        // Same slot, just assign
+                        handleAssignTechnician(scheduleDrawer.technicianId);
+                      } else {
+                        // Different slot, reschedule and assign
+                        assignWithSlotMutation.mutate({
+                          orderId: assignModal.order._id,
+                          technicianId: scheduleDrawer.technicianId,
+                          newStart: selectedStart.toISOString(),
+                          newEnd: selectedEnd.toISOString()
+                        });
+                      }
+                    }}
+                    loading={assignWithSlotMutation.isPending || assignMutation.isPending}
+                    disabled={!selectedCalendarSlot || assignWithSlotMutation.isPending || assignMutation.isPending}
+                    className="whitespace-nowrap"
+                  >
+                    {assignWithSlotMutation.isPending || assignMutation.isPending ? 'Assigning...' : 'Assign Technician'}
+                  </Button>
+                  {selectedCalendarSlot && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCalendarSlot(null)}
+                      className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                    >
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
-        <ol className="mt-4 space-y-3">
-          {scheduleEntries.map((entry) => {
-            const serviceLabel =
-              typeof entry.order?.serviceItem === 'string'
-                ? entry.order?.serviceItem
-                : entry.order?.serviceItem?.name;
-            return (
-              <li key={entry.id} className="rounded-2xl border border-slate-100 p-4">
-                <p className="text-sm font-semibold text-slate-900">
-                  {formatDateTime(entry.start)} <span className="text-slate-400">→</span> {formatDateTime(entry.end)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {serviceLabel || 'Blocked slot'}
-                  {entry.order?.customer?.name ? ` · ${entry.order.customer.name}` : ''}
-                </p>
-                <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-600">
-                  {entry.status}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+
+        <div className="flex items-center justify-between mb-4">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const newDate = new Date(calendarStartDate);
+              newDate.setDate(newDate.getDate() - 7);
+              setCalendarStartDate(newDate);
+            }}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            ← Previous
+          </button>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatDateShort(calendarStartDate)} - {formatDateShort(getCalendarDays(calendarStartDate, 7)[6])}
+          </p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const newDate = new Date(calendarStartDate);
+              newDate.setDate(newDate.getDate() + 7);
+              setCalendarStartDate(newDate);
+            }}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            Next →
+          </button>
+        </div>
+
+        {(loadingSchedule || loadingTimeSlots) && (
+          <p className="text-sm text-slate-400 text-center py-8">Loading calendar…</p>
+        )}
+
+        {!loadingSchedule && !loadingTimeSlots && timeSlots.length === 0 && (
+          <p className="text-sm text-amber-600 text-center py-8">No time slots configured. Add slots in admin settings.</p>
+        )}
+
+        {!loadingSchedule && !loadingTimeSlots && timeSlots.length > 0 && (
+          <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+            {getCalendarDays(calendarStartDate, 7).map((day) => {
+              const dayOfWeek = day.getDay();
+              const slotsForDay = timeSlots.filter((slot) => slot.dayOfWeek === dayOfWeek);
+              const isToday = day.toDateString() === new Date().toDateString();
+              const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
+
+              return (
+                <div key={day.toISOString()} className={`rounded-xl border p-3 ${isToday ? 'border-blue-200 bg-blue-50/50' : 'border-slate-100'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className={`text-sm font-semibold ${isToday ? 'text-blue-900' : 'text-slate-900'}`}>
+                      {day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </p>
+                    {isToday && <span className="text-[10px] uppercase tracking-wide bg-blue-500 text-white px-2 py-0.5 rounded-full">Today</span>}
+                    {isPast && <span className="text-[10px] uppercase tracking-wide bg-slate-300 text-slate-600 px-2 py-0.5 rounded-full">Past</span>}
+                  </div>
+
+                  {slotsForDay.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No slots configured for this day</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {slotsForDay.map((slot) => {
+                        const blockedEntry = isSlotBlocked(day, slot.startTime, slot.endTime, scheduleEntries);
+                        const isBlocked = blockedEntry !== null;
+                        const slotStartTime = buildSlotDateTime(day, slot.startTime);
+                        const slotEndTime = buildSlotDateTime(day, slot.endTime);
+                        const isSlotPast = slotEndTime < new Date();
+
+                        // Check if this slot matches the current order's time
+                        const orderStart = assignModal.order?.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
+                        const orderEnd = assignModal.order?.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
+                        const isCurrentOrderSlot = orderStart && orderEnd &&
+                          slotStartTime.getTime() === orderStart.getTime() &&
+                          slotEndTime.getTime() === orderEnd.getTime();
+
+                        const canSelect = !isBlocked && !isSlotPast && assignModal.order && scheduleDrawer.technicianId;
+
+                        // Check if this slot is currently selected
+                        const isSelected = selectedCalendarSlot &&
+                          selectedCalendarSlot.date.toDateString() === day.toDateString() &&
+                          selectedCalendarSlot.startTime === slot.startTime &&
+                          selectedCalendarSlot.endTime === slot.endTime;
+
+                        return (
+                          <button
+                            key={`${day.toISOString()}-${slot.startTime}-${slot.endTime}`}
+                            type="button"
+                            disabled={isBlocked || isSlotPast || !assignModal.order}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              if (!canSelect) return;
+
+                              // Toggle selection
+                              if (isSelected) {
+                                setSelectedCalendarSlot(null);
+                              } else {
+                                setSelectedCalendarSlot({
+                                  date: day,
+                                  startTime: slot.startTime,
+                                  endTime: slot.endTime,
+                                  label: slot.label || `${slot.startTime} - ${slot.endTime}`
+                                });
+                              }
+                            }}
+                            className={`
+                              relative p-2 rounded-lg text-left text-xs transition-all
+                              ${isBlocked
+                                ? 'bg-rose-50 border border-rose-200 cursor-not-allowed'
+                                : isSlotPast
+                                  ? 'bg-slate-50 border border-slate-200 cursor-not-allowed opacity-50'
+                                  : isSelected
+                                    ? 'bg-blue-100 border-2 border-blue-500 ring-2 ring-blue-200 cursor-pointer'
+                                    : isCurrentOrderSlot
+                                      ? 'bg-emerald-50 border-2 border-emerald-400 hover:bg-emerald-100 cursor-pointer'
+                                      : 'bg-emerald-50/50 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer'
+                              }
+                            `}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`font-semibold ${isBlocked ? 'text-rose-700'
+                                : isSlotPast ? 'text-slate-400'
+                                  : isSelected ? 'text-blue-700'
+                                    : 'text-emerald-700'
+                                }`}>
+                                {slot.label || `${slot.startTime} - ${slot.endTime}`}
+                              </span>
+                              {isBlocked && (
+                                <span className="text-[10px] uppercase tracking-wide bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded">
+                                  Blocked
+                                </span>
+                              )}
+                              {isSelected && (
+                                <span className="text-[10px] uppercase tracking-wide bg-blue-500 text-white px-1.5 py-0.5 rounded">
+                                  Selected
+                                </span>
+                              )}
+                              {!isBlocked && !isSlotPast && !isSelected && (
+                                <span className="text-[10px] uppercase tracking-wide bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded">
+                                  Available
+                                </span>
+                              )}
+                            </div>
+                            <p className={`mt-1 ${isBlocked ? 'text-rose-600'
+                              : isSlotPast ? 'text-slate-400'
+                                : isSelected ? 'text-blue-600'
+                                  : 'text-emerald-600'
+                              }`}>
+                              {slot.startTime} → {slot.endTime}
+                            </p>
+
+                            {isBlocked && blockedEntry && (
+                              <div className="mt-2 pt-2 border-t border-rose-200">
+                                <p className="text-rose-700 font-medium truncate">
+                                  {typeof blockedEntry.order?.serviceItem === 'string'
+                                    ? blockedEntry.order?.serviceItem
+                                    : blockedEntry.order?.serviceItem?.name || 'Blocked'}
+                                </p>
+                                {blockedEntry.order?.customer?.name && (
+                                  <p className="text-rose-600 truncate">{blockedEntry.order.customer.name}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {!isBlocked && !isSlotPast && assignModal.order && (
+                              <div className="mt-2 pt-2 border-t border-emerald-200">
+                                <p className={`font-medium ${isSelected ? 'text-blue-700' : 'text-emerald-700'}`}>
+                                  {isSelected
+                                    ? '✓ Click "Assign Technician" above'
+                                    : isCurrentOrderSlot
+                                      ? '✓ Current order slot'
+                                      : 'Click to select'}
+                                </p>
+                                {!isCurrentOrderSlot && !isSelected && (
+                                  <p className="text-emerald-600 text-[10px]">Will reschedule order</p>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {assignWithSlotMutation.isPending && (
+          <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 shadow-xl flex items-center gap-3">
+              <svg className="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-slate-700 font-medium">Rescheduling and assigning…</span>
+            </div>
+          </div>
+        )}
+
+        {/* Existing blocked entries list */}
+        {!loadingSchedule && scheduleEntries.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-slate-200">
+            <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">Blocked entries ({scheduleEntries.length})</p>
+            <ol className="space-y-2 max-h-48 overflow-y-auto">
+              {scheduleEntries.map((entry) => {
+                const serviceLabel =
+                  typeof entry.order?.serviceItem === 'string'
+                    ? entry.order?.serviceItem
+                    : entry.order?.serviceItem?.name;
+                return (
+                  <li key={entry.id} className="rounded-lg border border-slate-100 p-2 text-xs">
+                    <p className="font-semibold text-slate-900">
+                      {formatDateTime(entry.start)} <span className="text-slate-400">→</span> {formatDateTime(entry.end)}
+                    </p>
+                    <p className="text-slate-500">
+                      {serviceLabel || 'Blocked slot'}
+                      {entry.order?.customer?.name ? ` · ${entry.order.customer.name}` : ''}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
       </Drawer>
 
       {/* Create Order Modal */}
@@ -2257,8 +2678,8 @@ export const OrdersPage = () => {
                 placeholder="Enter phone number"
                 disabled={checkingCustomer}
               />
-              <Button 
-                onClick={handleCheckCustomer} 
+              <Button
+                onClick={handleCheckCustomer}
                 loading={checkingCustomer}
                 variant="secondary"
                 className="mt-6"
@@ -2294,7 +2715,7 @@ export const OrdersPage = () => {
           {/* Address */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-slate-900">Service Address</h3>
-            
+
             {customerData && customerData.addresses && customerData.addresses.length > 0 && (
               <Select
                 label="Select Address *"
@@ -2425,7 +2846,7 @@ export const OrdersPage = () => {
 
       {/* Image Viewer Modal */}
       {imageViewer.open && createPortal(
-        <div 
+        <div
           className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-200"
           onClick={(e) => {
             e.stopPropagation();
@@ -2465,13 +2886,13 @@ export const OrdersPage = () => {
           </div>
 
           {/* Image Container */}
-          <div 
+          <div
             className="flex-1 flex items-center justify-center overflow-auto p-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <div 
+            <div
               className="relative transition-transform duration-200 ease-out"
-              style={{ 
+              style={{
                 transform: `scale(${imageZoom / 100})`,
                 cursor: imageZoom > 100 ? 'move' : 'default'
               }}
@@ -2507,7 +2928,7 @@ export const OrdersPage = () => {
               >
                 <MagnifyingGlassMinusIcon className="h-5 w-5" />
               </button>
-              
+
               <div className="flex items-center gap-2 px-3">
                 <input
                   type="range"

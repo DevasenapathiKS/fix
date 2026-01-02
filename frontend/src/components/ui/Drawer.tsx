@@ -13,7 +13,7 @@ interface DrawerProps {
 
 export const Drawer = ({ open, onClose, title, children, widthClassName = 'w-screen max-w-lg' }: DrawerProps) => (
   <Transition show={open} as={Fragment} appear>
-    <Dialog as="div" className="relative z-50" onClose={onClose}>
+    <Dialog as="div" className="relative z-[60]" onClose={() => {}} static>
       <Transition.Child
         as={Fragment}
         enter="ease-out duration-200"
@@ -23,12 +23,17 @@ export const Drawer = ({ open, onClose, title, children, widthClassName = 'w-scr
         leaveFrom="opacity-100"
         leaveTo="opacity-0"
       >
-        <div className="fixed inset-0 bg-slate-900/50" />
+        {/* Backdrop - click to close */}
+        <div 
+          className="fixed inset-0 bg-slate-900/50 cursor-pointer" 
+          onClick={onClose}
+          aria-hidden="true"
+        />
       </Transition.Child>
 
-      <div className="fixed inset-0 overflow-hidden">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 overflow-hidden">
-          <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-8">
+          <div className="fixed inset-y-0 right-0 flex max-w-full pl-8">
             <Transition.Child
               as={Fragment}
               enter="transform transition ease-out duration-300"

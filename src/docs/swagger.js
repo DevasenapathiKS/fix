@@ -41,7 +41,7 @@ const swaggerDefinition = {
     }
   },
   servers: [
-    { url: 'admin.eopsys.xyz/api', description: 'Local development' },
+    { url: 'localhost:4000/api', description: 'Local development' },
     { url: 'https://api.fixzep.com/api', description: 'Production (sample)' }
   ],
   tags: [

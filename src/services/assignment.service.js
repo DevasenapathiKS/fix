@@ -20,9 +20,9 @@ export const AssignmentService = {
     const profile = await TechnicianProfile.findOne({ user: technicianId });
     if (!profile) throw new ApiError(404, 'Technician profile missing');
 
-    if (!profile.serviceItems.map(String).includes(String(order.serviceItem))) {
-      throw new ApiError(400, 'Technician skill mismatch');
-    }
+    // if (!profile.serviceItems.map(String).includes(String(order.serviceItem))) {
+    //   throw new ApiError(400, 'Technician skill mismatch');
+    // }
 
     const calendarEntries = await TechnicianCalendar.find({ technician: technicianId });
     const available = isTechnicianAvailable({

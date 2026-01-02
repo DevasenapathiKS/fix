@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -36,12 +37,30 @@ const buildDateTime = (date: string, time?: string) => {
 
 export const TechniciansPage = () => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedTechnician, setSelectedTechnician] = useState<TechnicianSummary | null>(null);
+  const [pendingSelectedId, setPendingSelectedId] = useState<string | null>(() => searchParams.get('selected'));
 
   const { data: technicians = [], isLoading } = useQuery<TechnicianSummary[]>({
     queryKey: ['technicians'],
     queryFn: TechniciansAPI.list
   });
+
+  // Handle URL query param for deep linking from dashboard
+  useEffect(() => {
+    if (pendingSelectedId && technicians.length > 0 && !isLoading) {
+      const technician = technicians.find((t) => t.id === pendingSelectedId);
+      if (technician) {
+        setSelectedTechnician(technician);
+      }
+      // Clear the pending selection after attempting to open
+      setPendingSelectedId(null);
+      // Remove 'selected' from URL without triggering navigation
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('selected');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [technicians, pendingSelectedId, isLoading, searchParams, setSearchParams]);
 
   const { data: attendance = [], isFetching: loadingAttendance } = useQuery<TechnicianAttendanceRecord[]>({
     queryKey: ['technician-attendance', selectedTechnician?.id],

@@ -527,15 +527,19 @@ export const AdminService = {
   },
 
   async viewTechnicianSchedule(technicianId, options = {}) {
-    const startDate = options.startDate ? new Date(options.startDate) : new Date();
-    const endDate = options.endDate ? new Date(options.endDate) : dayjs(startDate).add(7, 'day').toDate();
-
-    const entries = await TechnicianCalendar.find({
-      technician: technicianId,
-      start: { $gte: startDate },
-      end: { $lte: endDate }
-    })
-      .sort({ start: 1 })
+    const { startDate, endDate } = options;
+    
+    // Build query - filter by date range if provided
+    const query = { technician: technicianId };
+    
+    if (startDate && endDate) {
+      // Use proper overlap logic: entry.start < endDate AND entry.end > startDate
+      query.start = { $lt: new Date(endDate) };
+      query.end = { $gt: new Date(startDate) };
+    }
+    
+    const entries = await TechnicianCalendar.find(query)
+      .sort({ start: 1 }) // Sort by start time ascending
       .populate('order', 'orderCode serviceItem customer status timeWindowStart timeWindowEnd')
       .lean();
 

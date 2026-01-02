@@ -13,7 +13,8 @@ const technicianCalendarSchema = new mongoose.Schema(
 );
 
 technicianCalendarSchema.index({ technician: 1, start: 1, end: 1 });
-technicianCalendarSchema.index({ technician: 1, date: 1 }, { unique: true });
+// Allow multiple bookings per day per technician - unique by technician + order instead
+technicianCalendarSchema.index({ technician: 1, order: 1 }, { unique: true });
 
 technicianCalendarSchema.pre('validate', function ensureDate(next) {
   if (!this.date && this.start) {
