@@ -4,6 +4,7 @@ import ServiceItem from '../models/service-item.model.js';
 import ApiError from '../utils/api-error.js';
 import { JOB_STATUS, ORDER_STATUS, NOTIFICATION_EVENTS } from '../constants/index.js';
 import { notificationService } from './notification.service.js';
+import { orderHistoryService } from './order-history.service.js';
 
 const recalculateCharges = (jobCard) => {
   const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -30,6 +31,8 @@ export const JobcardService = {
       throw new ApiError(403, 'Not allowed to update this job');
     }
 
+    const isFirstCheckIn = !jobCard.checkIns?.length;
+    
     jobCard.checkIns.push({
       timestamp: new Date(),
       location: { type: 'Point', coordinates: [lng, lat] },
@@ -43,6 +46,21 @@ export const JobcardService = {
         lastCheckInAt: new Date(),
         location: { type: 'Point', coordinates: [lng, lat] }
       }
+    });
+
+    // Add history entry for check-in
+    await orderHistoryService.recordEntry({
+      orderId: jobCard.order,
+      action: isFirstCheckIn ? 'technician_checked_in' : 'technician_progress_update',
+      message: isFirstCheckIn 
+        ? 'Technician checked in at location' 
+        : note || 'Technician progress update',
+      metadata: { 
+        jobCardId, 
+        location: { lat, lng },
+        note: note || undefined
+      },
+      performedBy: technicianId
     });
 
     await notificationService.notifyAdmin(NOTIFICATION_EVENTS.JOB_UPDATED, {
@@ -337,6 +355,19 @@ export const JobcardService = {
         createdAt: new Date(),
         createdBy: technicianId
       };
+
+      // Add history entry for follow-up
+      await orderHistoryService.recordEntry({
+        orderId: order._id,
+        action: 'technician_follow_up',
+        message: followUpNote?.trim() || 'Technician marked job for follow up',
+        metadata: { 
+          jobCardId, 
+          resolution,
+          paymentStatus 
+        },
+        performedBy: technicianId
+      });
     } else {
       jobCard.status = JOB_STATUS.COMPLETED;
       order.status = ORDER_STATUS.COMPLETED;
@@ -346,6 +377,20 @@ export const JobcardService = {
           resolvedAt: new Date()
         };
       }
+
+      // Add history entry for checkout/completion
+      await orderHistoryService.recordEntry({
+        orderId: order._id,
+        action: 'technician_checked_out',
+        message: 'Technician checked out - job completed',
+        metadata: { 
+          jobCardId, 
+          resolution,
+          paymentStatus,
+          finalAmount: jobCard.finalAmount
+        },
+        performedBy: technicianId
+      });
     }
 
     await jobCard.save();

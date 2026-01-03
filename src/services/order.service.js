@@ -1,4 +1,5 @@
 import Order from '../models/order.model.js';
+import TechnicianCalendar from '../models/calendar.model.js';
 import { ORDER_STATUS } from '../constants/index.js';
 import ApiError from '../utils/api-error.js';
 import { notificationService, NOTIFICATION_EVENTS } from './notification.service.js';
@@ -67,21 +68,49 @@ export const OrderService = {
     if (!order) {
       throw new ApiError(404, 'Order not found');
     }
+    
     const start = new Date(newStart);
     const end = new Date(newEnd);
+    const previousTechnicianId = order.assignedTechnician;
+    
+    // Update order with new schedule
     order.timeWindowStart = start;
     order.timeWindowEnd = end;
     order.scheduledAt = start;
-    order.status = ORDER_STATUS.RESCHEDULED;
     order.rescheduleCount += 1;
+    
+    // Remove technician assignment and set status to pending
+    if (previousTechnicianId) {
+      // Delete the calendar entry for this order
+      await TechnicianCalendar.deleteOne({ order: orderId });
+      
+      order.assignedTechnician = null;
+      order.status = ORDER_STATUS.PENDING_ASSIGNMENT;
+      
+      // Notify the technician they've been unassigned
+      await notificationService.notifyTechnician(previousTechnicianId, NOTIFICATION_EVENTS.ORDER_RESCHEDULED, {
+        orderId: order._id,
+        newStart: start,
+        newEnd: end,
+        message: 'You have been unassigned from this order due to rescheduling'
+      });
+    } else {
+      order.status = ORDER_STATUS.RESCHEDULED;
+    }
 
     await order.save();
 
     await addHistoryEntry({
       orderId: order._id,
       action: NOTIFICATION_EVENTS.ORDER_RESCHEDULED,
-      message: 'Order rescheduled by admin',
-      metadata: { newStart: start, newEnd: end },
+      message: previousTechnicianId 
+        ? 'Order rescheduled by admin - technician unassigned' 
+        : 'Order rescheduled by admin',
+      metadata: { 
+        newStart: start, 
+        newEnd: end,
+        previousTechnician: previousTechnicianId || null
+      },
       performedBy: adminId
     });
 
@@ -90,14 +119,6 @@ export const OrderService = {
       newStart: start,
       newEnd: end
     });
-
-    if (order.assignedTechnician) {
-      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.ORDER_RESCHEDULED, {
-        orderId: order._id,
-        newStart: start,
-        newEnd: end
-      });
-    }
 
     return shapeOrderWithHistory(order);
   }

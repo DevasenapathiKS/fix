@@ -174,7 +174,7 @@ export const OrdersPage = () => {
   const [assigningTech, setAssigningTech] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-
+  
   // Create order form state
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerData, setCustomerData] = useState<CustomerSummary | null>(null);
@@ -194,9 +194,9 @@ export const OrdersPage = () => {
   const [issueDescription, setIssueDescription] = useState('');
   const [checkingCustomer, setCheckingCustomer] = useState(false);
   const [scheduleDrawer, setScheduleDrawer] = useState<{ open: boolean; technicianId: string | null; name: string }>({
-    open: false,
-    technicianId: null,
-    name: ''
+      open: false,
+      technicianId: null,
+      name: ''
   });
   const [calendarStartDate, setCalendarStartDate] = useState(() => {
     const today = new Date();
@@ -216,16 +216,16 @@ export const OrdersPage = () => {
   const [uploadedDocuments, setUploadedDocuments] = useState<FollowUpAttachment[]>([]);
   const [activityNote, setActivityNote] = useState('');
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
-
+  
   // Spare parts form state
   const [showAddSparePart, setShowAddSparePart] = useState(false);
   const [selectedSparePartId, setSelectedSparePartId] = useState('');
   const [sparePartQuantity, setSparePartQuantity] = useState('');
-
+  
   // Additional service form state
   const [showAddService, setShowAddService] = useState(false);
   const [selectedAdditionalServiceId, setSelectedAdditionalServiceId] = useState('');
-
+  
   // Edit customer address state
   const [editingAddress, setEditingAddress] = useState(false);
   const [selectedEditAddressId, setSelectedEditAddressId] = useState('');
@@ -236,7 +236,7 @@ export const OrdersPage = () => {
   const [editState, setEditState] = useState('');
   const [editPostalCode, setEditPostalCode] = useState('');
   const [additionalServiceQuantity, setAdditionalServiceQuantity] = useState('1');
-
+  
   const queryClient = useQueryClient();
 
   const closeAssignModal = () => {
@@ -422,49 +422,54 @@ export const OrdersPage = () => {
 
     (order?.history || []).forEach((entry, idx) => {
       if (!entry) return;
+      
+      // Determine accent color based on action type
+      let accent = 'bg-blue-100';
+      let title = humanize(entry.action) || 'Update';
+      
+      switch (entry.action) {
+        case 'technician_checked_in':
+          accent = 'bg-emerald-500';
+          title = 'Technician Checked In';
+          break;
+        case 'technician_checked_out':
+          accent = 'bg-rose-500';
+          title = 'Technician Checked Out';
+          break;
+        case 'technician_progress_update':
+          accent = 'bg-amber-500';
+          title = 'Progress Update';
+          break;
+        case 'technician_follow_up':
+          accent = 'bg-orange-500';
+          title = 'Follow Up Required';
+          break;
+        case 'technician_assigned':
+          accent = 'bg-indigo-500';
+          title = 'Technician Assigned';
+          break;
+        case 'order_rescheduled':
+          accent = 'bg-purple-500';
+          title = 'Order Rescheduled';
+          break;
+        case 'order_created':
+          accent = 'bg-slate-900';
+          title = 'Order Created';
+          break;
+        default:
+          accent = 'bg-blue-100';
+      }
+      
       events.push({
         id: `history-${idx}`,
-        title: humanize(entry.action) || 'Update',
+        title,
         description: [entry.message, entry.performedBy ? `By ${formatActorName(entry.performedBy)}` : null]
           .filter(Boolean)
           .join(' • '),
         timestamp: entry.performedAt,
-        accent: 'bg-blue-100'
+        accent
       });
     });
-
-    // if (jobCardDetail.jobCard) {
-    //   const technicianName =
-    //     typeof jobCardDetail.jobCard.technician === 'string'
-    //       ? jobCardDetail.jobCard.technician
-    //       : jobCardDetail.jobCard.technician?.name;
-
-    //   events.push({
-    //     id: 'jobcard-created',
-    //     title: 'Job card generated',
-    //     description: technicianName ? `Assigned to ${technicianName}` : undefined,
-    //     timestamp: jobCardDetail.jobCard.createdAt,
-    //     accent: 'bg-emerald-600'
-    //   });
-
-    //   events.push({
-    //     id: 'jobcard-status',
-    //     title: `Job status · ${humanize(jobCardDetail.jobCard.status)}`,
-    //     description: jobCardDetail.jobCard.updatedAt ? 'Status updated' : undefined,
-    //     timestamp: jobCardDetail.jobCard.updatedAt,
-    //     accent: 'bg-emerald-400'
-    //   });
-
-    //   (jobCardDetail.jobCard.checkIns || []).forEach((checkIn, idx) => {
-    //     events.push({
-    //       id: `checkin-${idx}`,
-    //       title: idx === 0 ? 'Technician checked in' : 'Progress checkpoint',
-    //       description: checkIn.note,
-    //       timestamp: checkIn.timestamp,
-    //       accent: 'bg-amber-500'
-    //     });
-    //   });
-    // }
 
     // if (order?.followUp?.reason) {
     //   events.push({
@@ -715,8 +720,8 @@ export const OrdersPage = () => {
     const totalAmount = (selectedService.basePrice || 0) * quantity;
     addAdditionalServiceMutation.mutate({
       orderId: jobCardModal.order._id,
-      service: {
-        description: `${selectedService.name} (x${quantity})`,
+      service: { 
+        description: `${selectedService.name} (x${quantity})`, 
         amount: totalAmount,
         serviceItemId: selectedAdditionalServiceId
       }
@@ -938,11 +943,10 @@ export const OrdersPage = () => {
     mutationFn: (phone: string) => CustomersAPI.findByPhone(phone),
     onSuccess: (data) => {
       if (data) {
-        console.log(data, 'dataaaaaaaaa');
         setCustomerData(data);
         setCustomerName(data.name || '');
         setCustomerEmail(data.email || '');
-
+        
         // Set default address or first address
         const defaultAddr = data.addresses?.find(a => a.isDefault) || data.addresses?.[0];
         if (defaultAddr) {
@@ -959,7 +963,7 @@ export const OrdersPage = () => {
           setState('');
           setPostalCode(data.postalCode || '');
         }
-
+        
         toast.success('Customer found!');
       } else {
         setCustomerData(null);
@@ -1038,7 +1042,7 @@ export const OrdersPage = () => {
       setPostalCode(address.postalCode || '');
     }
   };
-
+  
 
   const handleCheckCustomer = () => {
     if (!customerPhone.trim()) {
@@ -1054,19 +1058,19 @@ export const OrdersPage = () => {
       toast.error('Please fill all required fields');
       return;
     }
-
+    
     // Validate address - either selected or manually filled
     const hasSelectedAddress = selectedAddressId;
     const hasManualAddress = addressLine1 && city && state;
-
+    
     if (!hasSelectedAddress && !hasManualAddress) {
       toast.error('Please select an address or fill in address details');
       return;
     }
-
+    
     const scheduledDate = new Date(`${orderDate}T${orderStartTime}`);
     const endDate = new Date(`${orderDate}T${orderEndTime}`);
-
+    
     const orderPayload: any = {
       customerId: customerData?.id,
       serviceItem: selectedService,
@@ -1076,7 +1080,7 @@ export const OrdersPage = () => {
       issueDescription,
       slotLabel: `${orderStartTime} - ${orderEndTime}`
     };
-
+    
     // Add address ID if selected, otherwise send address data to create new one
     if (selectedAddressId) {
       orderPayload.addressId = selectedAddressId;
@@ -1089,7 +1093,7 @@ export const OrdersPage = () => {
         postalCode
       };
     }
-
+    
     createOrderMutation.mutate(orderPayload);
   };
 
@@ -1185,6 +1189,7 @@ export const OrdersPage = () => {
                     <Badge variant={order.status}>{order.status.replace(/_/g, ' ')}</Badge>
                   </td>
                   <td className="px-4 py-4 text-right">
+                    {order.status !== 'completed' ? (
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="secondary"
@@ -1206,6 +1211,9 @@ export const OrdersPage = () => {
                         {order.assignedTechnician ? 'Reassign' : 'Assign'}
                       </Button>
                     </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">Completed</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1496,7 +1504,7 @@ export const OrdersPage = () => {
                   <h4 className="mt-2 text-lg font-semibold text-slate-900">{jobCardDetail.order.customer.name}</h4>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.phone}</p>
                   <p className="text-sm text-slate-600">{jobCardDetail.order.customer.email || 'Email not provided'}</p>
-
+                  
                   {editingAddress ? (
                     <div className="mt-3 space-y-3">
                       {customerData?.addresses && customerData?.addresses?.length > 0 && !isAddingNewAddress ? (
@@ -1541,7 +1549,7 @@ export const OrdersPage = () => {
                           </button>
                         </>
                       ) : null}
-
+                      
                       {(isAddingNewAddress || !customerData?.addresses?.length || selectedEditAddressId) && (
                         <>
                           {isAddingNewAddress && customerData?.addresses && customerData.addresses.length > 0 && (
@@ -1594,7 +1602,7 @@ export const OrdersPage = () => {
                           />
                         </>
                       )}
-
+                      
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -1607,15 +1615,15 @@ export const OrdersPage = () => {
                               toast.error('Please fill required address fields');
                               return;
                             }
-                            const customerId = typeof jobCardDetail.order.customer === 'string'
-                              ? jobCardDetail.order.customer
+                            const customerId = typeof jobCardDetail.order.customer === 'string' 
+                              ? jobCardDetail.order.customer 
                               : jobCardDetail.order.customer._id || jobCardDetail.order.customer._id;
-
+                            
                             if (!customerId) {
                               toast.error('Customer ID not found');
                               return;
                             }
-
+                            
                             updateCustomerAddressMutation.mutate({
                               customerId,
                               addressId: selectedEditAddressId || undefined,
@@ -1677,7 +1685,7 @@ export const OrdersPage = () => {
                                 className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
                               >
                                 {doc.kind === 'image' ? (
-                                  <div
+                                  <div 
                                     className="aspect-square cursor-pointer"
                                     onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
                                   >
@@ -1743,7 +1751,7 @@ export const OrdersPage = () => {
                                 className="relative rounded-xl border border-dashed border-slate-200 bg-slate-50 overflow-hidden group"
                               >
                                 {doc.kind === 'image' ? (
-                                  <div
+                                  <div 
                                     className="aspect-square cursor-pointer"
                                     onClick={() => setImageViewer({ open: true, url: doc.url, name: doc.name || `Image ${idx + 1}` })}
                                   >
@@ -1839,7 +1847,7 @@ export const OrdersPage = () => {
                       </Button>
                     )}
                   </div>
-
+                  
                   {showAddService && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <Select
@@ -1867,7 +1875,7 @@ export const OrdersPage = () => {
                         <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
                           <span className="font-semibold">Total: </span>
                           {formatCurrency(
-                            (allServiceItems.find(s => s._id === selectedAdditionalServiceId)?.basePrice || 0) *
+                            (allServiceItems.find(s => s._id === selectedAdditionalServiceId)?.basePrice || 0) * 
                             parseFloat(additionalServiceQuantity || '1')
                           )}
                         </div>
@@ -1881,7 +1889,7 @@ export const OrdersPage = () => {
                       </Button>
                     </div>
                   )}
-
+                  
                   {jobCard?.extraWork && jobCard.extraWork.length > 0 ? (
                     <ul className="mt-3 space-y-2 text-sm">
                       {jobCard.extraWork.map((work, idx) => (
@@ -1915,11 +1923,16 @@ export const OrdersPage = () => {
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-4">
+                  <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-slate-900">Activity Tracking</h4>
+                    {activityFeed.length > 0 && (
+                      <span className="text-xs text-slate-400">{activityFeed.length} entries</span>
+                    )}
+                  </div>
                   {activityFeed.length === 0 ? (
                     <p className="mt-2 text-xs text-slate-500">No activity recorded yet for this job.</p>
                   ) : (
-                    <ol className="mt-4 space-y-4 border-l border-slate-100 pl-4">
+                    <ol className="mt-4 space-y-4 border-l border-slate-100 pl-4 max-h-64 overflow-y-auto pr-2">
                       {activityFeed.map((activity) => (
                         <li key={activity.id} className="relative pl-4">
                           <span className={`absolute -left-2 top-2 block h-3 w-3 rounded-full ${activity.accent || 'bg-slate-300'}`} />
@@ -1971,21 +1984,6 @@ export const OrdersPage = () => {
                   </form>
                 </div>
 
-                <div className="rounded-2xl border border-slate-100 p-4">
-                  <h4 className="text-sm font-semibold text-slate-900">Technician Check-ins</h4>
-                  {jobCard?.checkIns && jobCard.checkIns.length > 0 ? (
-                    <ol className="mt-4 space-y-3">
-                      {jobCard.checkIns.map((checkIn, idx) => (
-                        <li key={`${checkIn.timestamp}-${idx}`} className="rounded-xl bg-slate-50 p-3 text-sm">
-                          <p className="font-medium text-slate-900">{formatDateTime(checkIn.timestamp)}</p>
-                          {checkIn.note && <p className="text-xs text-slate-500">{checkIn.note}</p>}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="mt-2 text-xs text-slate-500">{jobCard ? 'No technician check-ins yet.' : 'Technician check-ins will stream in once the job starts.'}</p>
-                  )}
-                </div>
               </div>
 
               <div className="space-y-6">
@@ -2077,9 +2075,9 @@ export const OrdersPage = () => {
                         <label
                           htmlFor="followup-file-input"
                           className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition cursor-pointer ${isOrderCompleted
-                            ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
-                            : 'border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'
-                            }`}
+                              ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed' 
+                              : 'border-slate-200 bg-slate-50/50 text-slate-500 hover:border-slate-400'
+                          }`}
                         >
                           <span className="font-semibold text-slate-900">Drag & drop files</span>
                           <span className="text-xs text-slate-500">or click to browse</span>
@@ -2088,8 +2086,8 @@ export const OrdersPage = () => {
                       {followUpAttachments.length > 0 && (
                         <div className="grid grid-cols-2 gap-3">
                           {followUpAttachments.map((attachment, idx) => (
-                            <div
-                              key={`${attachment.name || 'attachment'}-${idx}`}
+                            <div 
+                              key={`${attachment.name || 'attachment'}-${idx}`} 
                               className="relative rounded-xl border border-slate-100 bg-white/70 overflow-hidden group"
                             >
                               {attachment.kind === 'video' ? (
@@ -2101,13 +2099,13 @@ export const OrdersPage = () => {
                                   />
                                 </div>
                               ) : (
-                                <div
+                                <div 
                                   className="aspect-square cursor-pointer"
                                   onClick={() => setImageViewer({ open: true, url: attachment.url, name: attachment.name || `Evidence ${idx + 1}` })}
                                 >
-                                  <img
-                                    src={attachment.url}
-                                    alt={attachment.name || 'Attachment'}
+                                  <img 
+                                    src={attachment.url} 
+                                    alt={attachment.name || 'Attachment'} 
                                     className="w-full h-full object-cover hover:opacity-90 transition-opacity"
                                   />
                                 </div>
@@ -2188,7 +2186,7 @@ export const OrdersPage = () => {
                       </Button>
                     )}
                   </div>
-
+                  
                   {showAddSparePart && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <Select
@@ -2216,7 +2214,7 @@ export const OrdersPage = () => {
                         <div className="rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
                           <span className="font-semibold">Total: </span>
                           {formatCurrency(
-                            (allSpareparts.find(p => p._id === selectedSparePartId)?.unitPrice || 0) *
+                            (allSpareparts.find(p => p._id === selectedSparePartId)?.unitPrice || 0) * 
                             parseFloat(sparePartQuantity || '1')
                           )}
                         </div>
@@ -2230,7 +2228,7 @@ export const OrdersPage = () => {
                       </Button>
                     </div>
                   )}
-
+                  
                   {spareParts.length > 0 && (
                     <div className="mt-3 overflow-x-auto">
                       <table className="min-w-full text-left text-sm">
@@ -2589,11 +2587,11 @@ export const OrdersPage = () => {
 
                             {isBlocked && blockedEntry && (
                               <div className="mt-2 pt-2 border-t border-rose-200">
-                                <p className="text-rose-700 font-medium truncate">
+                                {/* <p className="text-rose-700 font-medium truncate">
                                   {typeof blockedEntry.order?.serviceItem === 'string'
                                     ? blockedEntry.order?.serviceItem
                                     : blockedEntry.order?.serviceItem?.name || 'Blocked'}
-                                </p>
+                                </p> */}
                                 {blockedEntry.order?.customer?.name && (
                                   <p className="text-rose-600 truncate">{blockedEntry.order.customer.name}</p>
                                 )}
@@ -2642,24 +2640,24 @@ export const OrdersPage = () => {
           <div className="mt-6 pt-4 border-t border-slate-200">
             <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">Blocked entries ({scheduleEntries.length})</p>
             <ol className="space-y-2 max-h-48 overflow-y-auto">
-              {scheduleEntries.map((entry) => {
-                const serviceLabel =
-                  typeof entry.order?.serviceItem === 'string'
-                    ? entry.order?.serviceItem
-                    : entry.order?.serviceItem?.name;
-                return (
+          {scheduleEntries.map((entry) => {
+            const serviceLabel =
+              typeof entry.order?.serviceItem === 'string'
+                ? entry.order?.serviceItem
+                : entry.order?.serviceItem?.name;
+            return (
                   <li key={entry.id} className="rounded-lg border border-slate-100 p-2 text-xs">
                     <p className="font-semibold text-slate-900">
-                      {formatDateTime(entry.start)} <span className="text-slate-400">→</span> {formatDateTime(entry.end)}
-                    </p>
+                  {formatDateTime(entry.start)} <span className="text-slate-400">→</span> {formatDateTime(entry.end)}
+                </p>
                     <p className="text-slate-500">
-                      {serviceLabel || 'Blocked slot'}
-                      {entry.order?.customer?.name ? ` · ${entry.order.customer.name}` : ''}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
+                  {serviceLabel || 'Blocked slot'}
+                  {entry.order?.customer?.name ? ` · ${entry.order.customer.name}` : ''}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
           </div>
         )}
       </Drawer>
@@ -2678,8 +2676,8 @@ export const OrdersPage = () => {
                 placeholder="Enter phone number"
                 disabled={checkingCustomer}
               />
-              <Button
-                onClick={handleCheckCustomer}
+              <Button 
+                onClick={handleCheckCustomer} 
                 loading={checkingCustomer}
                 variant="secondary"
                 className="mt-6"
@@ -2715,7 +2713,7 @@ export const OrdersPage = () => {
           {/* Address */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-slate-900">Service Address</h3>
-
+            
             {customerData && customerData.addresses && customerData.addresses.length > 0 && (
               <Select
                 label="Select Address *"
@@ -2846,7 +2844,7 @@ export const OrdersPage = () => {
 
       {/* Image Viewer Modal */}
       {imageViewer.open && createPortal(
-        <div
+        <div 
           className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-200"
           onClick={(e) => {
             e.stopPropagation();
@@ -2886,13 +2884,13 @@ export const OrdersPage = () => {
           </div>
 
           {/* Image Container */}
-          <div
+          <div 
             className="flex-1 flex items-center justify-center overflow-auto p-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <div
+            <div 
               className="relative transition-transform duration-200 ease-out"
-              style={{
+              style={{ 
                 transform: `scale(${imageZoom / 100})`,
                 cursor: imageZoom > 100 ? 'move' : 'default'
               }}
@@ -2928,7 +2926,7 @@ export const OrdersPage = () => {
               >
                 <MagnifyingGlassMinusIcon className="h-5 w-5" />
               </button>
-
+              
               <div className="flex items-center gap-2 px-3">
                 <input
                   type="range"
