@@ -18,6 +18,16 @@ export const upsertCategory = asyncHandler(async (req, res) => {
   return successResponse(res, { data: category, message: 'Category saved' });
 });
 
+export const updateCategory = asyncHandler(async (req, res) => {
+  const category = await AdminService.updateCategory(req.params.categoryId, req.body);
+  return successResponse(res, { data: category, message: 'Category updated successfully' });
+});
+
+export const deleteCategory = asyncHandler(async (req, res) => {
+  const result = await AdminService.deleteCategory(req.params.categoryId);
+  return successResponse(res, { data: result, message: 'Category deleted successfully' });
+});
+
 export const listCategories = asyncHandler(async (req, res) => {
   const categories = await AdminService.listCategories();
   return successResponse(res, { data: categories });
@@ -28,6 +38,16 @@ export const upsertServiceItem = asyncHandler(async (req, res) => {
   return successResponse(res, { data: serviceItem, message: 'Service item saved' });
 });
 
+export const updateServiceItem = asyncHandler(async (req, res) => {
+  const serviceItem = await AdminService.updateServiceItem(req.params.serviceItemId, req.body);
+  return successResponse(res, { data: serviceItem, message: 'Service item updated successfully' });
+});
+
+export const deleteServiceItem = asyncHandler(async (req, res) => {
+  const result = await AdminService.deleteServiceItem(req.params.serviceItemId);
+  return successResponse(res, { data: result, message: 'Service item deleted successfully' });
+});
+
 export const listServiceItems = asyncHandler(async (req, res) => {
   const items = await AdminService.listServiceItems(req.query.categoryId);
   return successResponse(res, { data: items });
@@ -36,6 +56,16 @@ export const listServiceItems = asyncHandler(async (req, res) => {
 export const listTechnicians = asyncHandler(async (_req, res) => {
   const technicians = await AdminService.listTechnicians();
   return successResponse(res, { data: technicians });
+});
+
+export const getTechnician = asyncHandler(async (req, res) => {
+  const technician = await AdminService.getTechnician(req.params.technicianId);
+  return successResponse(res, { data: technician });
+});
+
+export const updateTechnician = asyncHandler(async (req, res) => {
+  const technician = await AdminService.updateTechnician(req.params.technicianId, req.body);
+  return successResponse(res, { data: technician, message: 'Technician updated successfully' });
 });
 
 export const listSpareParts = asyncHandler(async (req, res) => {
@@ -107,6 +137,16 @@ export const createCustomer = asyncHandler(async (req, res) => {
 export const updateCustomerAddress = asyncHandler(async (req, res) => {
   const customer = await AdminService.updateCustomerAddress(req.params.customerId, req.body);
   return successResponse(res, { data: customer, message: 'Address updated successfully' });
+});
+
+export const updateCustomer = asyncHandler(async (req, res) => {
+  const customer = await AdminService.updateCustomer(req.params.customerId, req.body);
+  return successResponse(res, { data: customer, message: 'Customer updated successfully' });
+});
+
+export const deleteCustomerAddress = asyncHandler(async (req, res) => {
+  const customer = await AdminService.deleteCustomerAddress(req.params.customerId, req.params.addressId);
+  return successResponse(res, { data: customer, message: 'Address deleted successfully' });
 });
 
 export const createOrderFromAdmin = asyncHandler(async (req, res) => {

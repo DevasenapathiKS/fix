@@ -12,6 +12,8 @@ import {
   listTechnicianSkills,
   createTechnicianSkill,
   listTechnicians,
+  getTechnician,
+  updateTechnician,
   listTechnicianAttendance,
   listTimeSlots,
   markTechnicianAttendance,
@@ -21,7 +23,11 @@ import {
   technicianSchedule,
   updateTimeSlot,
   upsertCategory,
+  updateCategory,
+  deleteCategory,
   upsertServiceItem,
+  updateServiceItem,
+  deleteServiceItem,
   upsertSparePart,
   updateOrderStatus,
   uploadOrderMedia,
@@ -36,6 +42,8 @@ import {
   findCustomerByPhone,
   createCustomer,
   updateCustomerAddress,
+  updateCustomer,
+  deleteCustomerAddress,
   createOrderFromAdmin
 } from '../controllers/admin.controller.js';
 import { authenticate, allowAdminOnly } from '../middlewares/auth.middleware.js';
@@ -154,6 +162,23 @@ router.delete(
 );
 
 router.get('/technicians', listTechnicians);
+router.get('/technicians/:technicianId', validate([param('technicianId').isMongoId()]), getTechnician);
+router.put(
+  '/technicians/:technicianId',
+  validate([
+    param('technicianId').isMongoId(),
+    body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+    body('email').optional().isEmail().withMessage('Invalid email format'),
+    body('phone').optional().notEmpty().withMessage('Phone cannot be empty'),
+    body('status').optional().isIn(['active', 'inactive', 'suspended']),
+    body('experienceYears').optional().isFloat({ min: 0 }),
+    body('workingHours').optional().isObject(),
+    body('skills').optional().isArray(),
+    body('serviceItems').optional().isArray(),
+    body('serviceCategories').optional().isArray()
+  ]),
+  updateTechnician
+);
 router.get('/technicians/:technicianId/availability', validate([param('technicianId').isMongoId()]), technicianAvailability);
 router.get(
   '/technicians/:technicianId/schedule',
@@ -188,6 +213,21 @@ router.post(
 
 router.post('/categories', validate([body('name').notEmpty()]), upsertCategory);
 router.get('/categories', listCategories);
+router.put(
+  '/categories/:categoryId',
+  validate([
+    param('categoryId').isMongoId(),
+    body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+    body('description').optional(),
+    body('imageUrl').optional()
+  ]),
+  updateCategory
+);
+router.delete(
+  '/categories/:categoryId',
+  validate([param('categoryId').isMongoId()]),
+  deleteCategory
+);
 
 router.post(
   '/service-items',
@@ -195,6 +235,23 @@ router.post(
   upsertServiceItem
 );
 router.get('/service-items', listServiceItems);
+router.put(
+  '/service-items/:serviceItemId',
+  validate([
+    param('serviceItemId').isMongoId(),
+    body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+    body('description').optional(),
+    body('imageUrl').optional(),
+    body('basePrice').optional().isFloat({ min: 0 }),
+    body('category').optional().isMongoId()
+  ]),
+  updateServiceItem
+);
+router.delete(
+  '/service-items/:serviceItemId',
+  validate([param('serviceItemId').isMongoId()]),
+  deleteServiceItem
+);
 
 router.get('/spare-parts', listSpareParts);
 router.post(
@@ -243,6 +300,26 @@ router.put(
     body('postalCode').optional()
   ]),
   updateCustomerAddress
+);
+
+router.put(
+  '/customers/:customerId',
+  validate([
+    param('customerId').isMongoId(),
+    body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+    body('email').optional().isEmail().withMessage('Invalid email format'),
+    body('phone').optional().notEmpty().withMessage('Phone cannot be empty')
+  ]),
+  updateCustomer
+);
+
+router.delete(
+  '/customers/:customerId/address/:addressId',
+  validate([
+    param('customerId').isMongoId(),
+    param('addressId').isMongoId()
+  ]),
+  deleteCustomerAddress
 );
 
 router.post(

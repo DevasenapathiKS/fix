@@ -881,12 +881,12 @@ export const OrdersPage = () => {
   const addSparePartMutation = useMutation({
     mutationFn: ({ orderId, sparePart }: { orderId: string; sparePart: { sparePartId: string; quantity: number; unitPrice: number } }) =>
       OrdersAPI.addSparePart(orderId, sparePart),
-    onSuccess: (variables) => {
+    onSuccess: (_data, variables) => {
       toast.success('Spare part added');
       setSelectedSparePartId('');
       setSparePartQuantity('');
       setShowAddSparePart(false);
-      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.order] });
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to add spare part')
   });
@@ -894,12 +894,12 @@ export const OrdersPage = () => {
   const addAdditionalServiceMutation = useMutation({
     mutationFn: ({ orderId, service }: { orderId: string; service: { description: string; amount: number; serviceItemId?: string } }) =>
       OrdersAPI.addAdditionalService(orderId, service),
-    onSuccess: (variables) => {
+    onSuccess: (_data, variables) => {
       toast.success('Additional service added');
       setSelectedAdditionalServiceId('');
       setAdditionalServiceQuantity('1');
       setShowAddService(false);
-      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.order] });
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to add service')
   });
@@ -907,9 +907,9 @@ export const OrdersPage = () => {
   const removeSparePartMutation = useMutation({
     mutationFn: ({ orderId, index }: { orderId: string; index: number }) =>
       OrdersAPI.removeSparePart(orderId, index),
-    onSuccess: (variables) => {
+    onSuccess: (_data, variables) => {
       toast.success('Spare part removed');
-      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.order] });
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to remove spare part')
   });
@@ -917,9 +917,9 @@ export const OrdersPage = () => {
   const removeAdditionalServiceMutation = useMutation({
     mutationFn: ({ orderId, index }: { orderId: string; index: number }) =>
       OrdersAPI.removeAdditionalService(orderId, index),
-    onSuccess: (variables) => {
+    onSuccess: (_data, variables) => {
       toast.success('Additional service removed');
-      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.order] });
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Unable to remove service')
   });
@@ -927,7 +927,7 @@ export const OrdersPage = () => {
   const updateCustomerAddressMutation = useMutation({
     mutationFn: ({ customerId, addressId, address }: { customerId: string; addressId?: string; address: { line1: string; line2?: string; city: string; state: string; postalCode?: string } }) =>
       CustomersAPI.updateAddress(customerId, { ...address, addressId }),
-    onSuccess: (variables) => {
+    onSuccess: (_data, variables) => {
       toast.success(variables.addressId ? 'Order address updated' : 'New address added successfully');
       setEditingAddress(false);
       setIsAddingNewAddress(false);

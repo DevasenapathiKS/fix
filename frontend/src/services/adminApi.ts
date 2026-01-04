@@ -105,8 +105,16 @@ export const CatalogAPI = {
     ),
   upsertCategory: (payload: ServiceCategory) =>
     extract<ServiceCategory>(apiClient.post<ApiSuccess<ServiceCategory>>('/admin/categories', payload)),
+  updateCategory: (categoryId: string, payload: Partial<ServiceCategory>) =>
+    extract<ServiceCategory>(apiClient.put<ApiSuccess<ServiceCategory>>(`/admin/categories/${categoryId}`, payload)),
+  deleteCategory: (categoryId: string) =>
+    extract<{ message: string }>(apiClient.delete<ApiSuccess<{ message: string }>>(`/admin/categories/${categoryId}`)),
   upsertServiceItem: (payload: ServiceItem) =>
-    extract<ServiceItem>(apiClient.post<ApiSuccess<ServiceItem>>('/admin/service-items', payload))
+    extract<ServiceItem>(apiClient.post<ApiSuccess<ServiceItem>>('/admin/service-items', payload)),
+  updateServiceItem: (serviceItemId: string, payload: Partial<ServiceItem>) =>
+    extract<ServiceItem>(apiClient.put<ApiSuccess<ServiceItem>>(`/admin/service-items/${serviceItemId}`, payload)),
+  deleteServiceItem: (serviceItemId: string) =>
+    extract<{ message: string }>(apiClient.delete<ApiSuccess<{ message: string }>>(`/admin/service-items/${serviceItemId}`))
 };
 
 export const SparePartsAPI = {
@@ -125,8 +133,24 @@ export const AdminUserAPI = {
   create: (payload: UserPayload) => extract<CreatedUser>(apiClient.post<ApiSuccess<CreatedUser>>('/admin/users', payload))
 };
 
+export interface UpdateTechnicianPayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+  status?: 'active' | 'inactive' | 'suspended';
+  experienceYears?: number;
+  workingHours?: { start?: string; end?: string };
+  skills?: string[];
+  serviceItems?: string[];
+  serviceCategories?: string[];
+}
+
 export const TechniciansAPI = {
   list: () => extract<TechnicianSummary[]>(apiClient.get<ApiSuccess<TechnicianSummary[]>>('/admin/technicians')),
+  get: (technicianId: string) =>
+    extract<TechnicianSummary>(apiClient.get<ApiSuccess<TechnicianSummary>>(`/admin/technicians/${technicianId}`)),
+  update: (technicianId: string, payload: UpdateTechnicianPayload) =>
+    extract<TechnicianSummary>(apiClient.put<ApiSuccess<TechnicianSummary>>(`/admin/technicians/${technicianId}`, payload)),
   availability: (technicianId: string) =>
     extract<TechnicianAvailabilitySlot[]>(
       apiClient.get<ApiSuccess<TechnicianAvailabilitySlot[]>>(`/admin/technicians/${technicianId}/availability`)
@@ -163,6 +187,10 @@ export const CustomersAPI = {
   list: () => extract<CustomerSummary[]>(apiClient.get<ApiSuccess<CustomerSummary[]>>('/admin/customers')),
   findByPhone: (phone: string) => extract<CustomerSummary | null>(apiClient.get<ApiSuccess<CustomerSummary | null>>(`/admin/customers/phone/${phone}`)),
   create: (payload: any) => extract<CustomerSummary>(apiClient.post<ApiSuccess<CustomerSummary>>('/admin/customers', payload)),
+  update: (customerId: string, payload: { name?: string; email?: string; phone?: string }) =>
+    extract<CustomerSummary>(apiClient.put<ApiSuccess<CustomerSummary>>(`/admin/customers/${customerId}`, payload)),
   updateAddress: (customerId: string, payload: { line1: string; line2?: string; city: string; state: string; postalCode?: string; addressId?: string }) =>
-    extract<CustomerSummary>(apiClient.put<ApiSuccess<CustomerSummary>>(`/admin/customers/${customerId}/address`, payload))
+    extract<CustomerSummary>(apiClient.put<ApiSuccess<CustomerSummary>>(`/admin/customers/${customerId}/address`, payload)),
+  deleteAddress: (customerId: string, addressId: string) =>
+    extract<CustomerSummary>(apiClient.delete<ApiSuccess<CustomerSummary>>(`/admin/customers/${customerId}/address/${addressId}`))
 };

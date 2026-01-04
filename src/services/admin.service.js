@@ -36,6 +36,51 @@ export const AdminService = {
     return category;
   },
 
+  async updateCategory(categoryId, payload) {
+    const category = await ServiceCategory.findById(categoryId);
+    if (!category) {
+      throw new ApiError(404, 'Category not found');
+    }
+
+    // Check if name is being changed and if new name already exists
+    if (payload.name && payload.name !== category.name) {
+      const existingCategory = await ServiceCategory.findOne({ name: payload.name, _id: { $ne: categoryId } });
+      if (existingCategory) {
+        throw new ApiError(409, 'A category with this name already exists');
+      }
+    }
+
+    if (payload.name !== undefined) category.name = payload.name;
+    if (payload.description !== undefined) category.description = payload.description;
+    if (payload.imageUrl !== undefined) category.imageUrl = payload.imageUrl;
+    if (payload.isActive !== undefined) category.isActive = payload.isActive;
+
+    await category.save();
+    return category;
+  },
+
+  async deleteCategory(categoryId) {
+    const category = await ServiceCategory.findById(categoryId);
+    if (!category) {
+      throw new ApiError(404, 'Category not found');
+    }
+
+    // Check if there are service items in this category
+    const serviceItemCount = await ServiceItem.countDocuments({ category: categoryId });
+    if (serviceItemCount > 0) {
+      throw new ApiError(400, `Cannot delete category with ${serviceItemCount} service item(s). Delete or move the items first.`);
+    }
+
+    // Check if there are orders using this category
+    const orderCount = await Order.countDocuments({ serviceCategory: categoryId });
+    if (orderCount > 0) {
+      throw new ApiError(400, `Cannot delete category with ${orderCount} existing order(s).`);
+    }
+
+    await ServiceCategory.deleteOne({ _id: categoryId });
+    return { message: 'Category deleted successfully' };
+  },
+
   async listCategories() {
     return ServiceCategory.find({}).sort({ name: 1 });
   },
@@ -48,6 +93,50 @@ export const AdminService = {
       { new: true, upsert: true }
     );
     return serviceItem;
+  },
+
+  async updateServiceItem(serviceItemId, payload) {
+    const serviceItem = await ServiceItem.findById(serviceItemId);
+    if (!serviceItem) {
+      throw new ApiError(404, 'Service item not found');
+    }
+
+    // Check if name is being changed and if new name already exists in the same category
+    if (payload.name && payload.name !== serviceItem.name) {
+      const existingItem = await ServiceItem.findOne({
+        category: serviceItem.category,
+        name: payload.name,
+        _id: { $ne: serviceItemId }
+      });
+      if (existingItem) {
+        throw new ApiError(409, 'A service item with this name already exists in this category');
+      }
+    }
+
+    if (payload.name !== undefined) serviceItem.name = payload.name;
+    if (payload.description !== undefined) serviceItem.description = payload.description;
+    if (payload.imageUrl !== undefined) serviceItem.imageUrl = payload.imageUrl;
+    if (payload.basePrice !== undefined) serviceItem.basePrice = payload.basePrice;
+    if (payload.category !== undefined) serviceItem.category = payload.category;
+
+    await serviceItem.save();
+    return serviceItem.populate('category', 'name');
+  },
+
+  async deleteServiceItem(serviceItemId) {
+    const serviceItem = await ServiceItem.findById(serviceItemId);
+    if (!serviceItem) {
+      throw new ApiError(404, 'Service item not found');
+    }
+
+    // Check if there are orders using this service item
+    const orderCount = await Order.countDocuments({ serviceItem: serviceItemId });
+    if (orderCount > 0) {
+      throw new ApiError(400, `Cannot delete service item with ${orderCount} existing order(s).`);
+    }
+
+    await ServiceItem.deleteOne({ _id: serviceItemId });
+    return { message: 'Service item deleted successfully' };
   },
 
   async listServiceItems(categoryId) {
@@ -133,6 +222,117 @@ export const AdminService = {
           : null
       };
     });
+  },
+
+  async getTechnician(technicianId) {
+    const profile = await TechnicianProfile.findOne({ user: technicianId })
+      .populate('user', 'name email mobile status')
+      .populate('serviceItems', '_id name')
+      .populate('serviceCategories', '_id name')
+      .populate('skills', '_id name')
+      .lean();
+
+    if (!profile) {
+      throw new ApiError(404, 'Technician not found');
+    }
+
+    const techUser = profile.user || {};
+    return {
+      id: techUser._id?.toString() || String(profile.user),
+      name: techUser.name,
+      email: techUser.email,
+      phone: techUser.mobile,
+      status: techUser.status,
+      experienceYears: profile.experienceYears,
+      averageRating: profile.averageRating,
+      skills: (profile.skills || []).map((skill) => ({
+        id: skill._id?.toString(),
+        name: skill.name
+      })),
+      workingHours: profile.workingHours,
+      serviceItems: (profile.serviceItems || []).map((item) => ({
+        id: item._id?.toString(),
+        name: item.name
+      })),
+      serviceCategories: (profile.serviceCategories || []).map((cat) => ({
+        id: cat._id?.toString(),
+        name: cat.name
+      }))
+    };
+  },
+
+  async updateTechnician(technicianId, payload) {
+    const user = await User.findById(technicianId);
+    if (!user || user.role !== USER_ROLES.TECHNICIAN) {
+      throw new ApiError(404, 'Technician not found');
+    }
+
+    const profile = await TechnicianProfile.findOne({ user: technicianId });
+    if (!profile) {
+      throw new ApiError(404, 'Technician profile not found');
+    }
+
+    // Update user fields
+    if (payload.name !== undefined) user.name = payload.name;
+    if (payload.email !== undefined) user.email = payload.email;
+    if (payload.phone !== undefined) {
+      // Check if phone is already in use
+      const existingUser = await User.findOne({ mobile: payload.phone, _id: { $ne: technicianId } });
+      if (existingUser) {
+        throw new ApiError(409, 'Phone number already in use');
+      }
+      user.mobile = payload.phone;
+    }
+    if (payload.status !== undefined) user.status = payload.status;
+    await user.save();
+
+    // Update profile fields
+    if (payload.experienceYears !== undefined) profile.experienceYears = payload.experienceYears;
+    if (payload.workingHours !== undefined) profile.workingHours = payload.workingHours;
+
+    // Update skills
+    if (payload.skills !== undefined) {
+      const skillIds = [];
+      for (const skillInput of payload.skills) {
+        if (mongoose.Types.ObjectId.isValid(skillInput)) {
+          skillIds.push(skillInput);
+        } else if (typeof skillInput === 'string' && skillInput.trim()) {
+          // Create new skill if it doesn't exist
+          let skill = await TechnicianSkill.findOne({ name: new RegExp(`^${skillInput.trim()}$`, 'i') });
+          if (!skill) {
+            skill = await TechnicianSkill.create({ name: skillInput.trim() });
+          }
+          skillIds.push(skill._id);
+        }
+      }
+      profile.skills = skillIds;
+    }
+
+    // Update service items
+    if (payload.serviceItems !== undefined) {
+      const validItemIds = payload.serviceItems.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validItemIds.length) {
+        const items = await ServiceItem.find({ _id: { $in: validItemIds } }, '_id');
+        profile.serviceItems = items.map((item) => item._id);
+      } else {
+        profile.serviceItems = [];
+      }
+    }
+
+    // Update service categories
+    if (payload.serviceCategories !== undefined) {
+      const validCatIds = payload.serviceCategories.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validCatIds.length) {
+        const cats = await ServiceCategory.find({ _id: { $in: validCatIds } }, '_id');
+        profile.serviceCategories = cats.map((cat) => cat._id);
+      } else {
+        profile.serviceCategories = [];
+      }
+    }
+
+    await profile.save();
+
+    return this.getTechnician(technicianId);
   },
 
   async upsertSparePart(payload) {
@@ -375,6 +575,69 @@ export const AdminService = {
         isDefault: addr.isDefault
       }))
     };
+  },
+
+  async updateCustomer(customerId, payload) {
+    const user = await User.findById(customerId);
+    if (!user) {
+      throw new ApiError(404, 'Customer not found');
+    }
+
+    // Check if phone is being changed and if new phone already exists
+    if (payload.phone && payload.phone !== user.mobile) {
+      const existingUser = await User.findOne({ mobile: payload.phone, _id: { $ne: customerId } });
+      if (existingUser) {
+        throw new ApiError(409, 'Phone number already in use by another customer');
+      }
+      user.mobile = payload.phone;
+    }
+
+    // Update user fields
+    if (payload.name) user.name = payload.name;
+    if (payload.email) user.email = payload.email;
+    await user.save();
+
+    // Update customer profile
+    const profile = await CustomerProfile.findOne({ user: customerId });
+    if (profile) {
+      if (payload.name) profile.displayName = payload.name;
+      if (payload.email) profile.email = payload.email;
+      if (payload.phone) profile.phone = payload.phone;
+      await profile.save();
+    }
+
+    return this.findCustomerByPhone(user.mobile);
+  },
+
+  async deleteCustomerAddress(customerId, addressId) {
+    const user = await User.findById(customerId);
+    if (!user) {
+      throw new ApiError(404, 'Customer not found');
+    }
+
+    const address = await CustomerAddress.findOne({ _id: addressId, customer: customerId });
+    if (!address) {
+      throw new ApiError(404, 'Address not found');
+    }
+
+    // Don't allow deleting the only address
+    const addressCount = await CustomerAddress.countDocuments({ customer: customerId });
+    if (addressCount <= 1) {
+      throw new ApiError(400, 'Cannot delete the only address');
+    }
+
+    // If deleting default address, make another one default
+    if (address.isDefault) {
+      const nextDefault = await CustomerAddress.findOne({ customer: customerId, _id: { $ne: addressId } });
+      if (nextDefault) {
+        nextDefault.isDefault = true;
+        await nextDefault.save();
+      }
+    }
+
+    await CustomerAddress.deleteOne({ _id: addressId });
+
+    return this.findCustomerByPhone(user.mobile);
   },
 
   async createOrderFromAdmin(payload, adminId) {
