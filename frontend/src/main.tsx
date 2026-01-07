@@ -6,16 +6,19 @@ import './index.css';
 import AppRouter from './router/AppRouter';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import { Toaster } from 'react-hot-toast';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRouter />
-          <Toaster position="top-right" />
-        </BrowserRouter>
+        <SocketProvider>
+          <BrowserRouter>
+            <AppRouter />
+            <Toaster position="top-right" />
+          </BrowserRouter>
+        </SocketProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>

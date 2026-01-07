@@ -272,6 +272,7 @@ export interface ServiceItem {
   description?: string;
   imageUrl?: string;
   basePrice?: number;
+  isActive?: boolean;
 }
 
 export interface TechnicianSkill {

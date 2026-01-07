@@ -11,6 +11,8 @@ import { CreateUserPage } from '../pages/CreateUserPage';
 import { TimeSlotsPage } from '../pages/TimeSlotsPage';
 import { TechniciansPage } from '../pages/TechniciansPage';
 import { CustomersPage } from '../pages/CustomersPage';
+import { BannersPage } from '../pages/BannersPage';
+import { BannerFormPage } from '../pages/BannerFormPage';
 
 const AppRouter = () => (
   <Routes>
@@ -31,6 +33,9 @@ const AppRouter = () => (
       <Route path="/spare-parts" element={<SparePartsPage />} />
       <Route path="/time-slots" element={<TimeSlotsPage />} />
       <Route path="/users/new" element={<CreateUserPage />} />
+      <Route path="/banners" element={<BannersPage />} />
+      <Route path="/banners/new" element={<BannerFormPage />} />
+      <Route path="/banners/:bannerId" element={<BannerFormPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

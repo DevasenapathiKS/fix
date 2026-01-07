@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { ArrowLeftIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { CatalogAPI } from '../services/adminApi';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -131,6 +131,45 @@ export const CategoryDetailPage = () => {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to update category')
   });
 
+  // Toggle service item status mutation
+  const toggleServiceItemStatusMutation = useMutation({
+    mutationFn: ({ itemId, isActive }: { itemId: string; isActive: boolean }) =>
+      CatalogAPI.updateServiceItem(itemId, { isActive }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.isActive ? 'Sub category activated' : 'Sub category deactivated');
+      queryClient.invalidateQueries({ queryKey: ['serviceItems', resolvedCategoryId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to update status')
+  });
+
+  // Toggle category status mutation
+  const toggleCategoryStatusMutation = useMutation({
+    mutationFn: ({ isActive }: { isActive: boolean }) =>
+      CatalogAPI.updateCategory(resolvedCategoryId, { isActive }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.isActive ? 'Category activated' : 'Category deactivated');
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to update status')
+  });
+
+  const handleToggleItemStatus = (item: ServiceItem) => {
+    if (item._id) {
+      toggleServiceItemStatusMutation.mutate({
+        itemId: item._id,
+        isActive: !(item.isActive ?? true)
+      });
+    }
+  };
+
+  const handleToggleCategoryStatus = () => {
+    if (category) {
+      toggleCategoryStatusMutation.mutate({
+        isActive: !(category.isActive ?? true)
+      });
+    }
+  };
+
   const openAddModal = () => {
     setEditingItem(null);
     serviceItemForm.reset({ category: resolvedCategoryId, name: '', description: '', basePrice: 0, imageUrl: '' });
@@ -209,10 +248,17 @@ export const CategoryDetailPage = () => {
           </Button>
           <div className="flex items-center gap-3">
             {category?.imageUrl && (
-              <img src={category.imageUrl} alt={category.name} className="h-12 w-12 rounded-xl object-cover" />
+              <img src={category.imageUrl} alt={category.name} className={`h-12 w-12 rounded-xl object-cover ${!(category.isActive ?? true) ? 'grayscale opacity-60' : ''}`} />
             )}
             <div>
-              <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Catalog</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Catalog</p>
+                {category && !(category.isActive ?? true) && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-medium">
+                    Inactive
+                  </span>
+                )}
+              </div>
               <h1 className="mt-1 text-2xl font-bold text-slate-900">
                 {loadingCategories ? 'Loading…' : category?.name || 'Category not found'}
               </h1>
@@ -222,9 +268,20 @@ export const CategoryDetailPage = () => {
         </div>
         <div className="flex gap-2">
           {category && (
-            <Button variant="secondary" onClick={openEditCategoryModal} icon={<PencilIcon className="h-4 w-4" />}>
-              Edit Category
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={handleToggleCategoryStatus}
+                loading={toggleCategoryStatusMutation.isPending}
+                icon={(category.isActive ?? true) ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                className={(category.isActive ?? true) ? '' : '!bg-emerald-50 !text-emerald-700 !border-emerald-200'}
+              >
+                {(category.isActive ?? true) ? 'Deactivate' : 'Activate'}
+              </Button>
+              <Button variant="secondary" onClick={openEditCategoryModal} icon={<PencilIcon className="h-4 w-4" />}>
+                Edit Category
+              </Button>
+            </>
           )}
           <Button onClick={openAddModal} disabled={!category}>
             Add Sub Category
@@ -246,45 +303,74 @@ export const CategoryDetailPage = () => {
           )}
           {!loadingServiceItems && serviceItems.length > 0 && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {serviceItems.map((item) => (
-                <div
-                  key={item._id}
-                  className="group relative flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm"
-                >
-                  {/* Edit/Delete buttons */}
-                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(item)}
-                      className="p-1.5 rounded-lg bg-white/90 text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors shadow-sm"
-                      title="Edit sub category"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openDeleteConfirm(item)}
-                      className="p-1.5 rounded-lg bg-white/90 text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors shadow-sm"
-                      title="Delete sub category"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.name} className="h-20 w-20 rounded-2xl object-cover" />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-50 text-xs text-slate-400">No image</div>
-                  )}
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.name}</p>
-                    <p className="text-xs text-slate-500 line-clamp-2">{item.description || '—'}</p>
-                    {typeof item.basePrice === 'number' && (
-                      <p className="mt-1 text-sm font-medium text-slate-700">Base ₹{item.basePrice.toFixed(2)}</p>
+              {serviceItems.map((item) => {
+                const isActive = item.isActive ?? true;
+                return (
+                  <div
+                    key={item._id}
+                    className={`group relative flex flex-col items-center gap-3 rounded-2xl border bg-white p-6 text-center shadow-sm ${
+                      isActive
+                        ? 'border-slate-100'
+                        : 'border-slate-200 bg-slate-50 opacity-60'
+                    }`}
+                  >
+                    {/* Status badge */}
+                    {!isActive && (
+                      <div className="absolute left-2 top-2">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-medium">
+                          Inactive
+                        </span>
+                      </div>
                     )}
+
+                    {/* Edit/Delete/Toggle buttons */}
+                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleItemStatus(item)}
+                        className={`p-1.5 rounded-lg bg-white/90 transition-colors shadow-sm ${
+                          isActive
+                            ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
+                            : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
+                        }`}
+                        title={isActive ? 'Deactivate sub category' : 'Activate sub category'}
+                        disabled={toggleServiceItemStatusMutation.isPending}
+                      >
+                        {isActive ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(item)}
+                        className="p-1.5 rounded-lg bg-white/90 text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors shadow-sm"
+                        title="Edit sub category"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConfirm(item)}
+                        className="p-1.5 rounded-lg bg-white/90 text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors shadow-sm"
+                        title="Delete sub category"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className={`h-20 w-20 rounded-2xl object-cover ${!isActive ? 'grayscale' : ''}`} />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-50 text-xs text-slate-400">No image</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="text-xs text-slate-500 line-clamp-2">{item.description || '—'}</p>
+                      {typeof item.basePrice === 'number' && (
+                        <p className="mt-1 text-sm font-medium text-slate-700">Base ₹{item.basePrice.toFixed(2)}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

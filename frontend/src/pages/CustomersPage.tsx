@@ -17,11 +17,22 @@ export const CustomersPage = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<any>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Edit form state
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+
+  // Create customer form state
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerAddressLine1, setNewCustomerAddressLine1] = useState('');
+  const [newCustomerAddressLine2, setNewCustomerAddressLine2] = useState('');
+  const [newCustomerCity, setNewCustomerCity] = useState('');
+  const [newCustomerState, setNewCustomerState] = useState('');
+  const [newCustomerPostalCode, setNewCustomerPostalCode] = useState('');
 
   // Address form state
   const [addressLabel, setAddressLabel] = useState('');
@@ -87,6 +98,59 @@ export const CustomersPage = () => {
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to delete address')
   });
+
+  const createCustomerMutation = useMutation({
+    mutationFn: (payload: { name: string; phone: string; email?: string; address?: { line1: string; line2?: string; city: string; state: string; postalCode?: string } }) =>
+      CustomersAPI.create(payload),
+    onSuccess: () => {
+      toast.success('Customer created successfully');
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setCreateModalOpen(false);
+      resetCreateForm();
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to create customer')
+  });
+
+  const resetCreateForm = () => {
+    setNewCustomerName('');
+    setNewCustomerEmail('');
+    setNewCustomerPhone('');
+    setNewCustomerAddressLine1('');
+    setNewCustomerAddressLine2('');
+    setNewCustomerCity('');
+    setNewCustomerState('');
+    setNewCustomerPostalCode('');
+  };
+
+  const handleCreateCustomer = () => {
+    if (!newCustomerName.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!newCustomerPhone.trim()) {
+      toast.error('Phone number is required');
+      return;
+    }
+
+    const payload: { name: string; phone: string; email?: string; address?: { line1: string; line2?: string; city: string; state: string; postalCode?: string } } = {
+      name: newCustomerName.trim(),
+      phone: newCustomerPhone.trim(),
+      email: newCustomerEmail.trim() || undefined
+    };
+
+    // Only include address if at least line1, city, and state are provided
+    if (newCustomerAddressLine1.trim() && newCustomerCity.trim() && newCustomerState.trim()) {
+      payload.address = {
+        line1: newCustomerAddressLine1.trim(),
+        line2: newCustomerAddressLine2.trim() || undefined,
+        city: newCustomerCity.trim(),
+        state: newCustomerState.trim(),
+        postalCode: newCustomerPostalCode.trim() || undefined
+      };
+    }
+
+    createCustomerMutation.mutate(payload);
+  };
 
   const handleCustomerClick = (customer: CustomerSummary) => {
     setSelectedCustomer(customer);
@@ -168,9 +232,14 @@ export const CustomersPage = () => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Customers</p>
-        <h1 className="mt-2 text-3xl font-bold text-slate-900">Customer Directory</h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Customers</p>
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">Customer Directory</h1>
+        </div>
+        <Button onClick={() => setCreateModalOpen(true)} icon={<PlusIcon className="h-4 w-4" />}>
+          Add Customer
+        </Button>
       </div>
 
       <Card title="Customers">
@@ -442,6 +511,101 @@ export const CustomersPage = () => {
             <Button variant="secondary" onClick={() => {
               setAddressModalOpen(false);
               resetAddressForm();
+            }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create Customer Modal */}
+      <Modal
+        open={createModalOpen}
+        onClose={() => {
+          setCreateModalOpen(false);
+          resetCreateForm();
+        }}
+        title="Add New Customer"
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Basic Information */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Contact Information</h3>
+            <div className="space-y-4">
+              <Input
+                label="Name *"
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                placeholder="Customer name"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Phone *"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  placeholder="Phone number"
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={newCustomerEmail}
+                  onChange={(e) => setNewCustomerEmail(e.target.value)}
+                  placeholder="customer@email.com"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Address (Optional) */}
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Address (Optional)</h3>
+            <div className="space-y-4">
+              <Input
+                label="Address Line 1"
+                value={newCustomerAddressLine1}
+                onChange={(e) => setNewCustomerAddressLine1(e.target.value)}
+                placeholder="Street address"
+              />
+              <Input
+                label="Address Line 2"
+                value={newCustomerAddressLine2}
+                onChange={(e) => setNewCustomerAddressLine2(e.target.value)}
+                placeholder="Apartment, suite, etc."
+              />
+              <div className="grid grid-cols-3 gap-4">
+                <Input
+                  label="City"
+                  value={newCustomerCity}
+                  onChange={(e) => setNewCustomerCity(e.target.value)}
+                  placeholder="City"
+                />
+                <Input
+                  label="State"
+                  value={newCustomerState}
+                  onChange={(e) => setNewCustomerState(e.target.value)}
+                  placeholder="State"
+                />
+                <Input
+                  label="Postal Code"
+                  value={newCustomerPostalCode}
+                  onChange={(e) => setNewCustomerPostalCode(e.target.value)}
+                  placeholder="PIN Code"
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              If you provide an address, line 1, city, and state are required.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button onClick={handleCreateCustomer} loading={createCustomerMutation.isPending}>
+              Create Customer
+            </Button>
+            <Button variant="secondary" onClick={() => {
+              setCreateModalOpen(false);
+              resetCreateForm();
             }}>
               Cancel
             </Button>

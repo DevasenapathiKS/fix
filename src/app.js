@@ -2,11 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import swaggerUi from 'swagger-ui-express';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middlewares/error.middleware.js';
 import swaggerSpec from './docs/swagger.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const distPath = path.resolve(process.cwd(), 'frontend', 'dist');
 
@@ -14,6 +16,11 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Serve frontend dist
 app.use(express.static(distPath));
 
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));

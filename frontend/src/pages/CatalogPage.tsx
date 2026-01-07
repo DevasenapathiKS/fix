@@ -11,7 +11,7 @@ import { TextArea } from '../components/ui/TextArea';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import type { ServiceCategory } from '../types';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 export const CatalogPage = () => {
   const navigate = useNavigate();
@@ -76,6 +76,26 @@ export const CatalogPage = () => {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to delete category')
   });
 
+  const toggleCategoryStatusMutation = useMutation({
+    mutationFn: ({ categoryId, isActive }: { categoryId: string; isActive: boolean }) =>
+      CatalogAPI.updateCategory(categoryId, { isActive }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.isActive ? 'Category activated' : 'Category deactivated');
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to update status')
+  });
+
+  const handleToggleStatus = (category: ServiceCategory, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (category._id) {
+      toggleCategoryStatusMutation.mutate({
+        categoryId: category._id,
+        isActive: !(category.isActive ?? true)
+      });
+    }
+  };
+
   const openAddModal = () => {
     setEditingCategory(null);
     categoryForm.reset({ name: '', description: '', imageUrl: '' });
@@ -138,14 +158,42 @@ export const CatalogPage = () => {
           )}
           {!loadingCategories && categories.length > 0 && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {categories.map((category) => (
+              {categories.map((category) => {
+              const isActive = category.isActive ?? true;
+              return (
                 <div
                   key={category._id}
-                  className="group relative flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm transition hover:-translate-y-1 hover:border-slate-200 hover:shadow-lg cursor-pointer"
+                  className={`group relative flex flex-col items-center gap-3 rounded-2xl border bg-white p-6 text-center shadow-sm transition hover:-translate-y-1 hover:shadow-lg cursor-pointer ${
+                    isActive
+                      ? 'border-slate-100 hover:border-slate-200'
+                      : 'border-slate-200 bg-slate-50 opacity-60'
+                  }`}
                   onClick={() => navigate(`/catalog/${category._id}`)}
                 >
-                  {/* Edit/Delete buttons */}
+                  {/* Status badge */}
+                  {!isActive && (
+                    <div className="absolute left-2 top-2">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-medium">
+                        Inactive
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Edit/Delete/Toggle buttons */}
                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleStatus(category, e)}
+                      className={`p-1.5 rounded-lg bg-white/90 transition-colors shadow-sm ${
+                        isActive
+                          ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
+                          : 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50'
+                      }`}
+                      title={isActive ? 'Deactivate category' : 'Activate category'}
+                      disabled={toggleCategoryStatusMutation.isPending}
+                    >
+                      {isActive ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => openEditModal(category, e)}
@@ -165,7 +213,7 @@ export const CatalogPage = () => {
                   </div>
 
                   {category.imageUrl ? (
-                    <img src={category.imageUrl} alt={category.name} className="h-24 w-24 rounded-2xl object-cover" />
+                    <img src={category.imageUrl} alt={category.name} className={`h-24 w-24 rounded-2xl object-cover ${!isActive ? 'grayscale' : ''}`} />
                   ) : (
                     <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-slate-50 text-xs text-slate-400">No image</div>
                   )}
@@ -176,7 +224,8 @@ export const CatalogPage = () => {
                     )}
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </Card>

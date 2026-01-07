@@ -1,17 +1,30 @@
 import env from '../config/env.js';
 import { NOTIFICATION_EVENTS } from '../constants/index.js';
 import Notification from '../models/notification.model.js';
+import { socketService } from './socket.service.js';
 
 class NotificationService {
   async notifyAdmin(event, payload) {
+    // Emit to all admins via WebSocket
+    socketService.emitToAdmins(event, payload);
+    return this.dispatch({ topic: env.adminTopic, event, payload });
+  }
+
+  async notifyAdmins(event, payload) {
+    // Emit to all admins via WebSocket
+    socketService.emitToAdmins(event, payload);
     return this.dispatch({ topic: env.adminTopic, event, payload });
   }
 
   async notifyTechnician(technicianId, event, payload) {
+    // Emit to specific technician via WebSocket
+    socketService.emitToUser(technicianId, event, payload);
     return this.dispatch({ topic: `${env.technicianTopic}.${technicianId}`, event, payload });
   }
 
   async notifyCustomer(customerId, event, payload) {
+    // Emit to specific customer via WebSocket
+    socketService.emitToUser(customerId, event, payload);
     return this.dispatch({ topic: `customer.${customerId}`, event, payload });
   }
 

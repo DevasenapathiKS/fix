@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { ClipboardDocumentListIcon, Squares2X2Icon, WrenchIcon, UsersIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentListIcon, Squares2X2Icon, WrenchIcon, UsersIcon, ClockIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
 const links = [
@@ -10,6 +10,7 @@ const links = [
   { to: '/technicians', label: 'Technicians', icon: UsersIcon },
   { to: '/spare-parts', label: 'Spare Parts', icon: WrenchIcon },
   { to: '/time-slots', label: 'Time Slots', icon: ClockIcon },
+  { to: '/banners', label: 'Banners', icon: PhotoIcon },
   { to: '/users/new', label: 'Create User', icon: UsersIcon }
 ];
 
