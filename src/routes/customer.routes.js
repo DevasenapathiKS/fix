@@ -57,6 +57,16 @@ router.post('/auth/register', registerCustomer);
 router.post('/auth/login', loginValidator, loginCustomer);
 router.post('/auth/forgot-password', forgotPasswordValidator, forgotPassword);
 
+// Public routes - no authentication required
+router.get('/services', listServices);
+router.get(
+  '/services/search',
+  validate([query('keyword').optional().isString().withMessage('Keyword must be a string')]),
+  searchServices
+);
+router.get('/services/:serviceId', validate([param('serviceId').isMongoId()]), getServiceDetail);
+
+// Protected routes - authentication required
 router.use(authenticate, allowCustomerOnly);
 
 router.get('/profile', getProfile);
@@ -71,14 +81,6 @@ router.delete(
   deleteAddress
 );
 router.post('/addresses/:addressId/preferred', preferredAddressValidator, markPreferredAddress);
-
-router.get('/services', listServices);
-router.get(
-  '/services/search',
-  validate([query('keyword').optional().isString().withMessage('Keyword must be a string')]),
-  searchServices
-);
-router.get('/services/:serviceId', validate([param('serviceId').isMongoId()]), getServiceDetail);
 
 router.get(
   '/time-slots',

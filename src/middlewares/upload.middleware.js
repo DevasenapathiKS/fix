@@ -1,25 +1,9 @@
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+import { uploadToS3 } from '../utils/s3.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.join(__dirname, '../../uploads');
-
-// Create uploads directory if it doesn't exist
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Use memory storage to store files in memory as Buffer
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -40,6 +24,14 @@ export const upload = multer({
   },
 });
 
-export const getUploadUrl = (filename) => {
-  return `/uploads/${filename}`;
+/**
+ * Upload file to S3 and return the URL
+ */
+export const uploadFileToS3 = async (file, folder = 'banners') => {
+  try {
+    const fileUrl = await uploadToS3(file, folder);
+    return fileUrl;
+  } catch (error) {
+    throw new Error('Failed to upload file to S3: ' + error.message);
+  }
 };

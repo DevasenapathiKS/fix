@@ -1,7 +1,7 @@
 import asyncHandler from '../utils/async-handler.js'
 import { BannerService } from '../services/banner.service.js'
 import { successResponse } from '../utils/response.js'
-import { getUploadUrl } from '../middlewares/upload.middleware.js'
+import { uploadFileToS3 } from '../middlewares/upload.middleware.js'
 
 export const createBanner = asyncHandler(async (req, res) => {
   const payload = { ...req.body, createdBy: req.user.id }
@@ -44,7 +44,8 @@ export const uploadBannerImage = asyncHandler(async (req, res) => {
     return successResponse(res, { status: 400, data: {}, message: 'No file uploaded' })
   }
   
-  const imageUrl = getUploadUrl(req.file.filename)
+  // Upload to S3 and get the public URL
+  const imageUrl = await uploadFileToS3(req.file, 'banners')
   return successResponse(res, { status: 201, data: { imageUrl }, message: 'Image uploaded successfully' })
 })
 

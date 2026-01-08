@@ -14,7 +14,12 @@ const env = {
   defaultWorkingHours: {
     start: process.env.DEFAULT_WORKING_HOURS_START || '08:00',
     end: process.env.DEFAULT_WORKING_HOURS_END || '20:00'
-  }
+  },
+  // AWS S3 Configuration
+  awsRegion: process.env.AWS_REGION || 'us-east-1',
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  awsS3Bucket: process.env.AWS_S3_BUCKET,
 };
 
 export default env;
