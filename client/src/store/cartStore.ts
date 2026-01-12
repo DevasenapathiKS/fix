@@ -8,6 +8,7 @@ export interface CartItem {
   categoryName: string
   price: number
   duration?: number
+  imageUrl?: string
   quantity: number
 }
 

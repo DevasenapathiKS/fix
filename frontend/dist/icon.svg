@@ -1,0 +1,25 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#grad1)"/>
+  
+  <!-- Wrench icon -->
+  <g transform="translate(128, 128) scale(1)">
+    <path d="M200 48c-22.09 0-42.41 7.47-58.64 20.02L164.54 91.2C174.37 84.75 186.51 81 199.5 81c35.9 0 65 29.1 65 65 0 12.99-3.75 25.13-10.2 34.96l23.18 23.18C290.03 188.41 297.5 168.09 297.5 146c0-54.75-44.25-99-99-99l1.5 1z" fill="white" transform="translate(-60, -20) scale(1.2)"/>
+    <path d="M133.36 168.02c-4.66 6.22-7.86 13.53-9.11 21.48l-50.75 50.75c-12.5 12.5-12.5 32.76 0 45.25l22.63 22.63c12.5 12.5 32.76 12.5 45.25 0l50.75-50.75c7.95-1.25 15.26-4.45 21.48-9.11L133.36 168.02z" fill="url(#grad2)" transform="translate(-60, -20) scale(1.2)"/>
+  </g>
+  
+  <!-- F letter overlay -->
+  <text x="256" y="300" font-family="Arial Black, sans-serif" font-size="160" fill="white" text-anchor="middle" font-weight="bold" opacity="0.9">F</text>
+</svg>
+

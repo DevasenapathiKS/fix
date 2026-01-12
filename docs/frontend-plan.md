@@ -54,7 +54,7 @@
 - 401 response triggers logout redirect
 
 ## Styling
-- Tailwind config with Fixzep primary palette (#2563eb / #1d4ed8) and accent (#f97316)
+- Tailwind config with Fixzep primary palette (#374151 / #1d4ed8) and accent (#f97316)
 - Use Headless UI Dialogs for modals/drawers, Heroicons for consistent iconography
 
 ## Additional Enhancements

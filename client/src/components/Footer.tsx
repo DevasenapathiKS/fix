@@ -39,8 +39,13 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/cart" className="text-sm hover:text-primary-400 transition-colors">
-                  Cart
+                <Link to="/about" className="text-sm hover:text-primary-400 transition-colors">
+                  About
+                </Link>
+              </li>
+              <li>
+                <Link to="/contact" className="text-sm hover:text-primary-400 transition-colors">
+                  Contact
                 </Link>
               </li>
             </ul>
@@ -65,14 +70,14 @@ export const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-2 text-sm">
                 <PhoneIcon className="w-5 h-5 text-primary-400 flex-shrink-0" />
-                <a href="tel:+919876543210" className="hover:text-primary-400 transition-colors">
-                  +91 98765 43210
+                <a href="tel:+919585571110" className="hover:text-primary-400 transition-colors">
+                  +91 95855 71110
                 </a>
               </li>
               <li className="flex items-center gap-2 text-sm">
                 <EnvelopeIcon className="w-5 h-5 text-primary-400 flex-shrink-0" />
-                <a href="mailto:support@fixzep.com" className="hover:text-primary-400 transition-colors">
-                  support@fixzep.com
+                <a href="mailto:info@fixzep.com" className="hover:text-primary-400 transition-colors">
+                  info@fixzep.com
                 </a>
               </li>
             </ul>

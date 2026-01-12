@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
-import { XMarkIcon, TrashIcon, MinusIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, TrashIcon, MinusIcon, PlusIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { useCartStore } from '../../store/cartStore'
 import { useNavigate } from 'react-router-dom'
 
@@ -75,6 +75,13 @@ export const CartSidebar = ({ isOpen, onClose }: CartSidebarProps) => {
                               key={item.serviceId}
                               className="flex items-start space-x-4 border-b pb-4"
                             >
+                              <div className="w-14 h-14 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200 flex items-center justify-center">
+                                {item.imageUrl ? (
+                                  <img src={item.imageUrl} alt={item.serviceName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <PhotoIcon className="w-6 h-6 text-gray-400" />
+                                )}
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-sm font-medium text-gray-900">
                                   {item.serviceName}

@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   ArrowLeftIcon,
@@ -18,15 +18,32 @@ import {
 } from '@heroicons/react/24/outline'
 import { orderService } from '../services/orderService'
 import { format } from 'date-fns'
+import { useState, useMemo } from 'react'
 
 export const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [chatInput, setChatInput] = useState('')
 
   const { data: order, isLoading, error } = useQuery({
     queryKey: ['order', orderId],
     queryFn: () => orderService.getOrderById(orderId!),
     enabled: !!orderId,
+  })
+
+  const { data: jobCard } = useQuery({
+    queryKey: ['orderJobCard', orderId],
+    queryFn: () => orderService.getJobCard(orderId!),
+    enabled: !!orderId,
+  })
+
+  const sendMessageMutation = useMutation({
+    mutationFn: (message: string) => orderService.postMessage(orderId!, message),
+    onSuccess: () => {
+      setChatInput('')
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+    },
   })
 
   const getStatusIcon = (status: string) => {
@@ -118,23 +135,34 @@ export const OrderDetailPage = () => {
     )
   }
 
-  const getOrderTimeline = (status: string) => {
-    const steps = [
-      { key: 'pending', label: 'Order Placed', icon: ShoppingBagIcon },
-      { key: 'confirmed', label: 'Confirmed', icon: CheckCircleIcon },
-      { key: 'in-progress', label: 'In Progress', icon: WrenchScrewdriverIcon },
-      { key: 'completed', label: 'Completed', icon: CheckCircleIcon },
-    ]
+  // Timeline removed per request
 
-    const statusOrder = ['pending', 'confirmed', 'in-progress', 'completed']
-    const currentIndex = statusOrder.indexOf(status.toLowerCase())
+  const activity = useMemo(() => {
+    const entries = (order?.history || []).slice().sort((a: any, b: any) => {
+      const ta = new Date(a.performedAt || a.createdAt || 0).getTime()
+      const tb = new Date(b.performedAt || b.createdAt || 0).getTime()
+      return ta - tb
+    })
+    return entries
+  }, [order?.history])
 
-    return steps.map((step, index) => ({
-      ...step,
-      completed: index <= currentIndex,
-      active: index === currentIndex,
-    }))
-  }
+  const chatMessages = useMemo(() => {
+    return (order?.history || []).filter((e: any) => (e.action || '').toLowerCase() === 'chat_message')
+  }, [order?.history])
+
+  // Derived totals for Job Summary with safe fallbacks
+  const gstRate = 0.18
+  const subtotal = useMemo(() => {
+    const jcFinal = Number(jobCard?.finalAmount ?? 0)
+    const derived = Number(jobCard?.estimateAmount ?? 0) + Number(jobCard?.additionalCharges ?? 0)
+    const orderEst = Number(order?.estimatedCost ?? 0)
+    // Prefer job card final, else derived from job card fields, else order estimate
+    if (jcFinal > 0) return jcFinal
+    if (derived > 0) return derived
+    return orderEst
+  }, [jobCard?.finalAmount, jobCard?.estimateAmount, jobCard?.additionalCharges, order?.estimatedCost])
+  const gstAmount = useMemo(() => subtotal * gstRate, [subtotal])
+  const grandTotal = useMemo(() => subtotal + gstAmount, [subtotal, gstAmount])
 
   if (isLoading) {
     return (
@@ -180,7 +208,7 @@ export const OrderDetailPage = () => {
 
   const statusConfig = getStatusConfig(order.status)
   const statusMessage = getStatusMessage(order.status)
-  const timeline = getOrderTimeline(order.status)
+  // Timeline removed
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 sm:py-12">
@@ -224,54 +252,7 @@ export const OrderDetailPage = () => {
           </div>
         </motion.div>
 
-        {/* Timeline - Only show if not cancelled */}
-        {order.status.toLowerCase() !== 'cancelled' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl shadow-md p-6 sm:p-8 mb-8"
-          >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Order Timeline</h2>
-            <div className="relative">
-              {/* Progress Line */}
-              <div className="absolute top-6 left-0 w-full h-0.5 bg-gray-200 hidden sm:block"></div>
-              <div
-                className="absolute top-6 left-0 h-0.5 bg-primary-600 hidden sm:block transition-all duration-500"
-                style={{
-                  width: `${(timeline.filter((s) => s.completed).length - 1) * (100 / (timeline.length - 1))}%`,
-                }}
-              ></div>
-
-              {/* Steps */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 relative">
-                {timeline.map((step) => {
-                  const StepIcon = step.icon
-                  return (
-                    <div key={step.key} className="flex flex-col items-center">
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
-                          step.completed
-                            ? 'bg-primary-600 text-white shadow-lg scale-110'
-                            : 'bg-gray-200 text-gray-400'
-                        } ${step.active ? 'ring-4 ring-primary-200 animate-pulse' : ''}`}
-                      >
-                        <StepIcon className="w-6 h-6" />
-                      </div>
-                      <p
-                        className={`text-sm font-medium text-center ${
-                          step.completed ? 'text-gray-900' : 'text-gray-500'
-                        }`}
-                      >
-                        {step.label}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </motion.div>
-        )}
+        {/* Timeline removed per request */}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -378,6 +359,77 @@ export const OrderDetailPage = () => {
                 </div>
               )}
             </motion.div>
+
+            {/* Activity & Chat - Combined Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="bg-white rounded-2xl shadow-md p-6 sm:p-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Activity & Chat</h2>
+                <span className="text-xs text-gray-500">Stay updated and message support</span>
+              </div>
+
+              {/* Activity Section */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Activity</h3>
+                {activity.length === 0 ? (
+                  <p className="text-sm text-gray-500">No activity yet.</p>
+                ) : (
+                  <div className="space-y-4 max-h-56 overflow-auto pr-1">
+                    {activity.map((entry: any, idx: number) => (
+                      <div key={entry._id || idx} className="flex items-start gap-3">
+                        <div className="w-2 h-2 mt-2 rounded-full bg-primary-600" />
+                        <div>
+                          <p className="text-sm text-gray-900">{entry.message || entry.action}</p>
+                          {entry.performedAt && (
+                            <p className="text-xs text-gray-500">{format(new Date(entry.performedAt), 'MMM dd, yyyy hh:mm a')}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="my-6 border-t border-gray-200" />
+
+              {/* Chat Section */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Chat</h3>
+                <div className="max-h-56 overflow-auto space-y-3 mb-4 pr-1">
+                  {chatMessages.length === 0 ? (
+                    <p className="text-sm text-gray-500">No messages yet. Start the conversation.</p>
+                  ) : (
+                    chatMessages.map((m: any, idx: number) => (
+                      <div key={m._id || idx} className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-sm text-gray-900">{m.message}</p>
+                        {m.performedAt && (
+                          <p className="text-xs text-gray-500 mt-1">{format(new Date(m.performedAt), 'MMM dd, yyyy hh:mm a')}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-300"
+                  />
+                  <button
+                    onClick={() => chatInput.trim() && sendMessageMutation.mutate(chatInput)}
+                    disabled={sendMessageMutation.isPending || !chatInput.trim()}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:bg-gray-300"
+                  >
+                    {sendMessageMutation.isPending ? 'Sending...' : 'Send'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
           {/* Right Column - Address & Customer Info */}
@@ -439,6 +491,52 @@ export const OrderDetailPage = () => {
                 Contact Support
               </button>
             </motion.div>
+
+            {/* Job Card Summary */}
+            {jobCard && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55 }}
+                className="bg-white rounded-2xl shadow-md p-6 sm:p-8"
+              >
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Job Summary</h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-600">Estimate</span><span className="font-semibold">₹{jobCard.estimateAmount.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">Additional</span><span className="font-semibold">₹{jobCard.additionalCharges.toFixed(2)}</span></div>
+                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Subtotal</span><span className="text-gray-900 font-bold">₹{subtotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">GST (18%)</span><span className="font-semibold">₹{gstAmount.toFixed(2)}</span></div>
+                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Grand Total</span><span className="text-primary-600 font-bold">₹{grandTotal.toFixed(2)}</span></div>
+                  <div className="text-xs text-gray-500">Payment: {jobCard.paymentStatus}</div>
+                </div>
+                {(jobCard.extraWork?.length > 0 || jobCard.spareParts?.length > 0) && (
+                  <div className="mt-4">
+                    {jobCard.extraWork?.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Extra Work</p>
+                        <ul className="space-y-1 text-sm text-gray-700">
+                          {jobCard.extraWork.map((w, i) => (
+                            <li key={i} className="flex justify-between"><span>{w.description}</span><span>₹{w.amount.toFixed(2)}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {jobCard.spareParts?.length > 0 && (
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Spare Parts</p>
+                        <ul className="space-y-1 text-sm text-gray-700">
+                          {jobCard.spareParts.map((p, i) => (
+                            <li key={i} className="flex justify-between"><span>Qty {p.quantity}</span><span>₹{(p.quantity * p.unitPrice).toFixed(2)}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Chat moved into combined card above */}
           </div>
         </div>
 

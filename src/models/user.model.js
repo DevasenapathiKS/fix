@@ -5,8 +5,8 @@ import { USER_ROLES } from '../constants/index.js';
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    mobile: { type: String, required: true, unique: true, alias: 'phone' },
+    email: { type: String, required: true, lowercase: true },
+    mobile: { type: String, required: true, alias: 'phone' },
     password: { type: String, required: true, select: false },
     role: { type: String, enum: Object.values(USER_ROLES), required: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },

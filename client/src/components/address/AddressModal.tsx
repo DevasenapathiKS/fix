@@ -4,22 +4,38 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addressService } from '../../services/addressService'
-import type { CreateAddressData } from '../../services/addressService'
+import type { CreateAddressData, Address } from '../../services/addressService'
 import { toast } from 'react-hot-toast'
 
 interface AddressModalProps {
   isOpen: boolean
   onClose: () => void
+  address?: Address
 }
 
-export const AddressModal = ({ isOpen, onClose }: AddressModalProps) => {
+export const AddressModal = ({ isOpen, onClose, address }: AddressModalProps) => {
   const queryClient = useQueryClient()
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<CreateAddressData>()
+  } = useForm<CreateAddressData>({
+    defaultValues: address
+      ? {
+          label: address.label,
+          contactName: address.contactName,
+          phone: address.phone,
+          line1: address.line1,
+          line2: address.line2 || '',
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode,
+          isDefault: address.isDefault,
+          notes: address.notes || '',
+        }
+      : undefined,
+  })
 
   const createMutation = useMutation({
     mutationFn: addressService.createAddress,
@@ -34,8 +50,25 @@ export const AddressModal = ({ isOpen, onClose }: AddressModalProps) => {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: (data: CreateAddressData) => addressService.updateAddress(address!._id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] })
+      toast.success('Address updated successfully!')
+      reset()
+      onClose()
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to update address')
+    },
+  })
+
   const onSubmit = (data: CreateAddressData) => {
-    createMutation.mutate(data)
+    if (address) {
+      updateMutation.mutate(data)
+    } else {
+      createMutation.mutate(data)
+    }
   }
 
   const handleClose = () => {
@@ -86,7 +119,7 @@ export const AddressModal = ({ isOpen, onClose }: AddressModalProps) => {
                       as="h3"
                       className="text-lg font-semibold leading-6 text-gray-900 mb-4"
                     >
-                      Add New Address
+                      {address ? 'Edit Address' : 'Add New Address'}
                     </Dialog.Title>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -258,10 +291,10 @@ export const AddressModal = ({ isOpen, onClose }: AddressModalProps) => {
                         </button>
                         <button
                           type="submit"
-                          disabled={createMutation.isPending}
+                          disabled={createMutation.isPending || updateMutation.isPending}
                           className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
-                          {createMutation.isPending ? 'Adding...' : 'Add Address'}
+                          {address ? (updateMutation.isPending ? 'Saving...' : 'Save Changes') : (createMutation.isPending ? 'Adding...' : 'Add Address')}
                         </button>
                       </div>
                     </form>

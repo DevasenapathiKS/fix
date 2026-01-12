@@ -10,6 +10,7 @@ import { orderService } from '../services/orderService'
 import type { CreateOrderData } from '../services/orderService'
 import { useAuthStore } from '../store/authStore'
 import { addressService, timeSlotService, type Address, type TimeSlot } from '../services/addressService'
+import { validateAddress } from '../services/serviceAreaService'
 import { AddressModal } from '../components/address/AddressModal'
 import { format } from 'date-fns'
 
@@ -26,9 +27,15 @@ export const CheckoutPage = () => {
   const { user } = useAuthStore()
   const { items, getTotalPrice, clearCart } = useCartStore()
   const totalPrice = getTotalPrice()
+  const gstRate = 0.18
+  const gstAmount = +(totalPrice * gstRate)
+  const serviceCharges = 0
+  const totalWithGST = +(totalPrice + gstAmount + serviceCharges)
 
   const [showAddressModal, setShowAddressModal] = useState(false)
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null)
+  const [serviceability, setServiceability] = useState<Record<string, boolean>>({})
+  const [validatingAddresses, setValidatingAddresses] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: TimeSlot } | null>(null)
 
   const {
@@ -52,11 +59,33 @@ export const CheckoutPage = () => {
 
   // Set default address
   useEffect(() => {
-    if (addresses && addresses.length > 0) {
-      const defaultAddr = addresses.find((addr) => addr.isDefault) || addresses[0]
-      setSelectedAddress(defaultAddr)
-      setValue('selectedAddressId', defaultAddr._id)
+    const runValidation = async () => {
+      if (!addresses || addresses.length === 0) return
+      setValidatingAddresses(true)
+      const results: Record<string, boolean> = {}
+      await Promise.all(
+        addresses.map(async (addr) => {
+          try {
+            const res = await validateAddress(addr)
+            results[addr._id] = res.serviceable
+          } catch {
+            results[addr._id] = true // fail-open
+          }
+        })
+      )
+      setServiceability(results)
+
+      const firstServiceable = addresses.find((a) => results[a._id])
+      if (firstServiceable) {
+        setSelectedAddress(firstServiceable)
+        setValue('selectedAddressId', firstServiceable._id)
+      } else {
+        setSelectedAddress(null)
+        toast.error('No addresses are in our service area. Please add a valid address.')
+      }
+      setValidatingAddresses(false)
     }
+    runValidation()
   }, [addresses, setValue])
 
   const createOrderMutation = useMutation({
@@ -104,13 +133,26 @@ export const CheckoutPage = () => {
       customerAddressId: selectedAddress._id,
       preferredStart: selectedSlot.slot.start,
       preferredEnd: selectedSlot.slot.end,
-      estimatedCost: totalPrice,
+      estimatedCost: totalWithGST,
     }
 
     createOrderMutation.mutate(orderData)
   }
 
-  const handleAddressSelect = (address: Address) => {
+  const handleAddressSelect = async (address: Address) => {
+    const cached = serviceability[address._id]
+    if (cached === false) {
+      toast.error('We currently do not serve this area. Please pick another address.')
+      return
+    }
+    if (cached === undefined) {
+      const res = await validateAddress(address)
+      setServiceability((m) => ({ ...m, [address._id]: res.serviceable }))
+      if (!res.serviceable) {
+        toast.error('We currently do not serve this area. Please pick another address.')
+        return
+      }
+    }
     setSelectedAddress(address)
     setValue('selectedAddressId', address._id)
   }
@@ -190,11 +232,16 @@ export const CheckoutPage = () => {
                       className={`relative border-2 rounded-lg p-4 cursor-pointer transition-all ${
                         selectedAddress?._id === address._id
                           ? 'border-primary-600 bg-primary-50'
+                          : serviceability[address._id] === false
+                          ? 'border-red-300 bg-red-50'
                           : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      } ${serviceability[address._id] === false ? 'opacity-70' : ''}`}
                     >
                       {selectedAddress?._id === address._id && (
                         <CheckCircleIcon className="absolute top-4 right-4 w-6 h-6 text-primary-600" />
+                      )}
+                      {serviceability[address._id] === false && (
+                        <span className="absolute top-4 right-4 bg-red-500 text-white text-xs font-semibold px-2 py-1 rounded">Out of service area</span>
                       )}
                       <div className="pr-8">
                         <div className="flex items-center gap-2 mb-2">
@@ -218,6 +265,9 @@ export const CheckoutPage = () => {
                         </p>
                         {address.notes && (
                           <p className="text-xs text-gray-500 mt-1">Note: {address.notes}</p>
+                        )}
+                        {validatingAddresses && serviceability[address._id] === undefined && (
+                          <p className="text-xs text-gray-500 mt-2">Validating service area…</p>
                         )}
                       </div>
                     </div>
@@ -322,13 +372,17 @@ export const CheckoutPage = () => {
                   <span className="text-gray-900">₹{totalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">GST (18%)</span>
+                  <span className="text-gray-900">₹{gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Service Charges</span>
-                  <span className="text-gray-900">₹0.00</span>
+                  <span className="text-gray-900">₹{serviceCharges.toFixed(2)}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="text-lg font-semibold text-gray-900">Total</span>
                   <span className="text-2xl font-bold text-primary-600">
-                    ₹{totalPrice.toFixed(2)}
+                    ₹{totalWithGST.toFixed(2)}
                   </span>
                 </div>
               </div>

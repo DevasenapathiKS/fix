@@ -62,7 +62,7 @@
   padding: 14px 16px;
   border-radius: 14px;
   border: none;
-  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  background: linear-gradient(120deg, #374151, #7c3aed);
   color: #ffffff;
   font-weight: 800;
   cursor: pointer;
@@ -145,7 +145,7 @@
 
 .cta-actions .solid {
   border: none;
-  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  background: linear-gradient(120deg, #374151, #7c3aed);
   color: #ffffff;
   padding: 10px 14px;
   border-radius: 12px;
@@ -373,7 +373,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #ffffff;
-  color: #2563eb;
+  color: #374151;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -382,7 +382,7 @@
 
 .view-all-btn:hover {
   background: #f1f5f9;
-  border-color: #2563eb;
+  border-color: #374151;
 }
 
 .orders-loader {
@@ -398,7 +398,7 @@
   width: 36px;
   height: 36px;
   border: 3px solid #e2e8f0;
-  border-top-color: #2563eb;
+  border-top-color: #374151;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -465,7 +465,7 @@
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: linear-gradient(135deg, #374151, #7c3aed);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -576,7 +576,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #ffffff;
-  color: #2563eb;
+  color: #374151;
   font-weight: 500;
   font-size: 13px;
   cursor: pointer;
@@ -585,7 +585,7 @@
 
 .order-card-footer .ghost:hover {
   background: #f1f5f9;
-  border-color: #2563eb;
+  border-color: #374151;
 }
 
 @keyframes spin {

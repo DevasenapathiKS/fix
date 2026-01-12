@@ -26,7 +26,7 @@ export interface AuthResponse {
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('Login attempt with:', { identifier: credentials.identifier })
-    console.log('API URL:', import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
+    console.log('API URL:', import.meta.env.VITE_API_URL || 'https://admin.eopsys.xyz/api')
     const response = await apiClient.post('/customer/auth/login', credentials)
     console.log('Login response:', response.data)
     return response.data.data
@@ -44,7 +44,23 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<AuthResponse['user']> {
-    const response = await apiClient.get('/customer/auth/me')
+    // Backend exposes profile at /customer/profile, not /auth/me
+    const response = await apiClient.get('/customer/profile')
+    return response.data.data
+  },
+
+  async updateProfile(data: Partial<{ name: string; phone: string }>): Promise<AuthResponse['user']> {
+    const response = await apiClient.put('/customer/profile', data)
+    return response.data.data
+  },
+
+  async forgotPassword(identifier: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/customer/auth/forgot-password', { identifier })
+    return response.data
+  },
+
+  async deactivateAccount(): Promise<{ deactivated: boolean }> {
+    const response = await apiClient.post('/customer/profile/deactivate')
     return response.data.data
   },
 }

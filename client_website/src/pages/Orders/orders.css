@@ -42,7 +42,7 @@
 
 .filter-select:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #374151;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -64,7 +64,7 @@
 }
 
 .order-card:hover {
-  border-color: #2563eb;
+  border-color: #374151;
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.1);
   transform: translateY(-2px);
 }
@@ -159,7 +159,7 @@
 
 .status-confirmed {
   background: #dbeafe;
-  color: #2563eb;
+  color: #374151;
 }
 
 .status-assigned {
@@ -206,7 +206,7 @@
 
 .payment-partial {
   background: #dbeafe;
-  color: #2563eb;
+  color: #374151;
 }
 
 .payment-paid {
@@ -231,7 +231,7 @@
 .orders-empty-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #374151 0%, #7c3aed 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -262,7 +262,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #374151 0%, #7c3aed 100%);
   color: white;
   border: none;
   border-radius: 0.75rem;
@@ -290,7 +290,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #2563eb;
+  border-top-color: #374151;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -443,7 +443,7 @@
 
 .section-action {
   font-size: 0.75rem;
-  color: #2563eb;
+  color: #374151;
   cursor: pointer;
   font-weight: 500;
   display: flex;
@@ -579,7 +579,7 @@
 .service-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #374151 0%, #7c3aed 100%);
   border-radius: 0.75rem;
   display: flex;
   align-items: center;
@@ -671,7 +671,7 @@
 .additional-service-price {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #2563eb;
+  color: #374151;
 }
 
 /* Activity Tracking */
@@ -706,13 +706,13 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #2563eb;
+  background: #374151;
   flex-shrink: 0;
   margin-top: 2px;
 }
 
 .activity-dot.created { background: #6366f1; }
-.activity-dot.confirmed { background: #2563eb; }
+.activity-dot.confirmed { background: #374151; }
 .activity-dot.assigned { background: #8b5cf6; }
 .activity-dot.in_progress { background: #f59e0b; }
 .activity-dot.completed { background: #10b981; }
@@ -757,7 +757,7 @@
 .technician-avatar {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #374151 0%, #7c3aed 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1033,7 +1033,7 @@
 
 .item-type-badge.extra_work {
   background: #dbeafe;
-  color: #2563eb;
+  color: #374151;
 }
 
 .item-type-badge.spare_part {
@@ -1124,7 +1124,7 @@
 .additional-items-total .total-amount {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #2563eb;
+  color: #374151;
 }
 
 /* Empty State */
@@ -1290,7 +1290,7 @@
 .invoice-total .invoice-value {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #2563eb;
+  color: #374151;
 }
 
 /* Actions */
@@ -1317,7 +1317,7 @@
 }
 
 .action-btn-primary {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #374151 0%, #7c3aed 100%);
   color: white;
   border: none;
 }
@@ -1498,7 +1498,7 @@
 
 .rating-comment-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #374151;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -1578,7 +1578,7 @@
 
 .cancel-reason-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #374151;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 

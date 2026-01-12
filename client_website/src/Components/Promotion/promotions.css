@@ -55,7 +55,7 @@
 .promo-tag {
   font-size: 12px;
   font-weight: 800;
-  color: #2563eb;
+  color: #374151;
   letter-spacing: 0.05em;
 }
 
@@ -73,7 +73,7 @@
 }
 
 .promo-card button {
-  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  background: linear-gradient(120deg, #374151, #7c3aed);
   color: #ffffff;
   border: none;
   padding: 10px 16px;

@@ -46,6 +46,14 @@ export interface Order {
   issueDescription?: string
   createdAt: string
   updatedAt: string
+  history?: Array<{
+    _id?: string
+    action?: string
+    message?: string
+    metadata?: any
+    performedAt?: string
+    performedBy?: any
+  }>
 }
 
 export const orderService = {
@@ -66,6 +74,24 @@ export const orderService = {
 
   cancelOrder: async (orderId: string): Promise<Order> => {
     const response = await apiClient.patch(`/customer/orders/${orderId}/cancel`)
+    return response.data.data
+  },
+
+  getJobCard: async (orderId: string): Promise<{
+    estimateAmount: number
+    additionalCharges: number
+    finalAmount: number
+    paymentStatus: string
+    status: string
+    extraWork: Array<{ description: string; amount: number }>
+    spareParts: Array<{ quantity: number; unitPrice: number }>
+  }> => {
+    const response = await apiClient.get(`/customer/orders/${orderId}/jobcard`)
+    return response.data.data
+  },
+
+  postMessage: async (orderId: string, message: string): Promise<{ ok: boolean }> => {
+    const response = await apiClient.post(`/customer/orders/${orderId}/messages`, { message })
     return response.data.data
   },
 }

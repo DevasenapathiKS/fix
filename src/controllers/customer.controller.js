@@ -1,6 +1,7 @@
 import asyncHandler from '../utils/async-handler.js';
 import { successResponse } from '../utils/response.js';
 import { CustomerService } from '../services/customer.service.js';
+import { orderHistoryService } from '../services/order-history.service.js';
 
 export const registerCustomer = asyncHandler(async (req, res) => {
   const result = await CustomerService.register(req.body);
@@ -148,4 +149,19 @@ export const getInvoice = asyncHandler(async (req, res) => {
 export const cancelOrder = asyncHandler(async (req, res) => {
   const order = await CustomerService.cancelOrder(req.user.id, req.params.orderId, req.body.reason);
   return successResponse(res, { data: order, message: 'Order cancelled successfully' });
+});
+
+export const getJobCard = asyncHandler(async (req, res) => {
+  const data = await CustomerService.getJobCardForCustomer(req.user.id, req.params.orderId);
+  return successResponse(res, { data });
+});
+
+export const postOrderMessage = asyncHandler(async (req, res) => {
+  const result = await CustomerService.sendOrderMessage(req.user.id, req.params.orderId, req.body.message);
+  return successResponse(res, { status: 201, data: result, message: 'Message sent' });
+});
+
+export const deactivateAccount = asyncHandler(async (req, res) => {
+  const result = await CustomerService.deactivateAccount(req.user.id);
+  return successResponse(res, { data: result, message: 'Account deactivated temporarily' });
 });

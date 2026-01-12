@@ -50,6 +50,7 @@ export const TopRatedServices = () => {
       categoryName: service.categoryName,
       price: service.basePrice,
       duration: service.duration,
+      imageUrl: service.imageUrl,
     })
     toast.success(`${service.name} added to cart!`)
   }

@@ -102,3 +102,8 @@ export const paymentStatusValidator = validate([
 export const orderHistoryQueryValidator = validate([
   query('status').optional().isString()
 ]);
+
+export const orderMessageValidator = validate([
+  param('orderId').isMongoId(),
+  body('message').isString().trim().isLength({ min: 1, max: 1000 })
+]);

@@ -34,19 +34,6 @@ export const HomePage = () => {
                             </svg>
                             <span className="text-lg font-medium">Serving OMR, Chennai</span>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Link
-                                to="/services"
-                                className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-lg text-primary-700 bg-white hover:bg-gray-50 transition-colors"
-                            >
-                                Browse Services
-                            </Link>
-                            <button
-                                className="inline-flex items-center justify-center px-8 py-3 border-2 border-white text-base font-medium rounded-lg text-white hover:bg-white hover:text-primary-700 transition-colors"
-                            >
-                                Learn More
-                            </button>
-                        </div>
                     </motion.div>
                 </div>
 
@@ -58,6 +45,76 @@ export const HomePage = () => {
                             fill="#F9FAFB"
                         />
                     </svg>
+                </div>
+            </section>
+
+            {/* Service Catalogs Section */}
+            <section className="py-16 bg-gray-50">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-12">
+                        <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                            Our Services
+                        </h2>
+                        <p className="text-lg text-gray-600">
+                            Browse our wide range of professional services
+                        </p>
+                    </div>
+
+                    <ServiceCatalog />
+                </div>
+            </section>
+
+
+            {/* Promotions/Banners Section */}
+            <section className="py-16 bg-gray-50">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <BannerPage />
+                </div>
+            </section>
+
+            {/* Frequently Ordered Services Section - Only for logged-in users */}
+            {user && (
+                <section className="py-16 bg-gradient-to-br from-gray-50 to-gray-100">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="text-center mb-12">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5 }}
+                            >
+                                <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                                    Frequently Ordered Services
+                                </h2>
+                                <p className="text-lg text-gray-600">
+                                    Most popular services trusted by our customers
+                                </p>
+                            </motion.div>
+                        </div>
+
+                        <FrequentlyOrderedServices />
+                    </div>
+                </section>
+            )}
+
+            {/* Top Rated Services Section */}
+            <section className="py-16 bg-white">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-12">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                                Top Rated Services
+                            </h2>
+                            <p className="text-lg text-gray-600">
+                                Highly rated services loved by our customers
+                            </p>
+                        </motion.div>
+                    </div>
+
+                    <TopRatedServices />
                 </div>
             </section>
 
@@ -131,83 +188,6 @@ export const HomePage = () => {
                             </p>
                         </motion.div>
                     </div>
-                </div>
-            </section>
-
-            {/* Promotions/Banners Section */}
-            <section className="py-16 bg-gray-50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                            Current Offers
-                        </h2>
-                        <p className="text-lg text-gray-600">
-                            Don't miss out on our special deals
-                        </p>
-                    </div>
-                    <BannerPage />
-                </div>
-            </section>
-
-            {/* Service Catalogs Section */}
-            <section className="py-16 bg-gray-50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                            Our Services
-                        </h2>
-                        <p className="text-lg text-gray-600">
-                            Browse our wide range of professional services
-                        </p>
-                    </div>
-
-                    <ServiceCatalog />
-                </div>
-            </section>
-
-            {/* Frequently Ordered Services Section - Only for logged-in users */}
-            {user && (
-                <section className="py-16 bg-gradient-to-br from-gray-50 to-gray-100">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5 }}
-                            >
-                                <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                                    Frequently Ordered Services
-                                </h2>
-                                <p className="text-lg text-gray-600">
-                                    Most popular services trusted by our customers
-                                </p>
-                            </motion.div>
-                        </div>
-
-                        <FrequentlyOrderedServices />
-                    </div>
-                </section>
-            )}
-
-            {/* Top Rated Services Section */}
-            <section className="py-16 bg-white">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-12">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                                Top Rated Services
-                            </h2>
-                            <p className="text-lg text-gray-600">
-                                Highly rated services loved by our customers
-                            </p>
-                        </motion.div>
-                    </div>
-
-                    <TopRatedServices />
                 </div>
             </section>
 

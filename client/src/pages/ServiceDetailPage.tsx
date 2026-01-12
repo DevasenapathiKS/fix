@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { ArrowLeftIcon, PlusIcon, CheckIcon, ClockIcon, CurrencyRupeeIcon, PhotoIcon } from '@heroicons/react/24/outline'
@@ -9,6 +10,8 @@ import { toast } from 'react-hot-toast'
 export const ServiceDetailPage = () => {
   const { categoryId } = useParams<{ categoryId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const highlightedId = searchParams.get('serviceId') || ''
   const { addItem, items } = useCartStore()
 
   const { data: categories, isLoading, error } = useQuery({
@@ -30,6 +33,7 @@ export const ServiceDetailPage = () => {
       categoryName: category!.name,
       price: service.basePrice || 0,
       duration: service.duration,
+      imageUrl: service.imageUrl,
     })
     toast.success(`${service.name} added to cart!`)
   }
@@ -69,6 +73,14 @@ export const ServiceDetailPage = () => {
       </div>
     )
   }
+  // Scroll to highlighted service when available
+  useEffect(() => {
+    if (!highlightedId) return
+    const el = document.getElementById(`svc-${highlightedId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightedId])
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -191,7 +203,8 @@ export const ServiceDetailPage = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.05 }}
-                className="group h-full relative"
+                id={`svc-${service._id}`}
+                className={`group h-full relative ${highlightedId === service._id ? 'ring-2 ring-primary-600 rounded-lg' : ''}`}
               >
                 {/* In Cart Badge */}
                 {isInCart(service._id) && (
@@ -203,7 +216,7 @@ export const ServiceDetailPage = () => {
                   </div>
                 )}
 
-                <div className="flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className={`flex flex-col h-full bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 ${highlightedId === service._id ? 'bg-primary-50' : ''}`}>
                   {/* Service Image with Overlay */}
                   {service.imageUrl ? (
                     <div className="relative h-48 overflow-hidden">

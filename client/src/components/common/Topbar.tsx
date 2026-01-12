@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Menu, Transition } from '@headlessui/react'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
@@ -8,12 +8,47 @@ import { LoginModal } from './LoginModal'
 import { SignupModal } from './SignupModal'
 import { CartButton } from '../cart/CartButton'
 import toast from 'react-hot-toast'
+import { catalogService, type ServiceItem } from '../../services/catalogService'
 
 export const Topbar = () => {
   const navigate = useNavigate()
   const { user, token, clearAuth } = useAuthStore()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showSignupModal, setShowSignupModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<ServiceItem[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const debounceRef = useRef<number | undefined>(undefined)
+  const deriveCategoryId = (svc: any): string | undefined => {
+    if (!svc) return undefined
+    // common shapes: svc.category._id, svc.categoryId, svc.category (string id)
+    if (svc.category && typeof svc.category === 'object' && svc.category._id) return svc.category._id
+    if (svc.category && typeof svc.category === 'string') return svc.category
+    if (svc.categoryId) return svc.categoryId
+    return undefined
+  }
+
+  const navigateToService = async (svc: ServiceItem) => {
+    let catId = deriveCategoryId(svc)
+    if (!catId) {
+      try {
+        const detail = await catalogService.getServiceDetail(svc._id)
+        catId = deriveCategoryId(detail) || (detail?.category?._id as any)
+      } catch (e) {
+        console.warn('Failed to fetch service detail for navigation', e)
+      }
+    }
+    if (catId) {
+      setShowResults(false)
+      setSearchQuery('')
+      setSearchResults([])
+      navigate(`/services/${catId}?serviceId=${svc._id}`)
+    } else {
+      toast.error('Unable to open service. Please try from Services page.')
+      navigate('/services')
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -38,6 +73,33 @@ export const Topbar = () => {
     setShowLoginModal(true)
   }
 
+  const runSearch = async (q: string) => {
+    const query = q.trim()
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+    try {
+      setSearching(true)
+      const results = await catalogService.searchServices(query)
+      setSearchResults(results || [])
+      setShowResults(true)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    // debounce
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(() => {
+      runSearch(searchQuery)
+    }, 300)
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    }
+  }, [searchQuery])
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -47,33 +109,41 @@ export const Topbar = () => {
             <h1 className="text-2xl font-bold text-primary-600">Fixzep</h1>
           </Link>
 
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link
-              to="/"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              Home
-            </Link>
-            <Link
-              to="/services"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              Services
-            </Link>
-            <Link
-              to="/about"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              About
-            </Link>
-            <Link
-              to="/contact"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              Contact
-            </Link>
-          </nav>
+          {/* Search */}
+          <div className="hidden md:block relative w-full max-w-xl">
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowResults(true)}
+              placeholder="Search services (e.g., AC repair)"
+              className="w-full px-4 py-2.5 rounded-full border border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-500"
+            />
+            {/* Results dropdown */}
+            {showResults && (searchResults.length > 0 || searching) && (
+              <div className="absolute left-0 right-0 mt-2 rounded-lg border border-gray-200 bg-white shadow-lg z-20 max-h-80 overflow-auto">
+                {searching && (
+                  <div className="px-4 py-3 text-sm text-gray-500">Searching…</div>
+                )}
+                {!searching && searchResults.map((svc) => (
+                  <button
+                    key={svc._id}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-start gap-3"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => navigateToService(svc)}
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{svc.name}</p>
+                      <p className="text-xs text-gray-500">{svc.category?.name}</p>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">₹{svc.basePrice}</span>
+                  </button>
+                ))}
+                {!searching && searchResults.length === 0 && (
+                  <div className="px-4 py-3 text-sm text-gray-500">No results</div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Auth Section */}
           <div className="flex items-center space-x-4">

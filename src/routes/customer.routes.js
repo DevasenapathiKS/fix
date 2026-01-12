@@ -14,6 +14,7 @@ import {
   getOrder,
   getPaymentStatus,
   getProfile,
+  getJobCard,
   getServiceDetail,
   getTechnicianStatus,
   initializePayment,
@@ -28,8 +29,10 @@ import {
   registerCustomer,
   rejectAdditionalItems,
   searchServices,
+  postOrderMessage,
   updateAddress,
-  updateProfile
+  updateProfile,
+  deactivateAccount
 } from '../controllers/customer.controller.js';
 import { authenticate, allowCustomerOnly } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
@@ -45,6 +48,7 @@ import {
   paymentConfirmValidator,
   paymentInitializeValidator,
   paymentStatusValidator,
+  orderMessageValidator,
   preferredAddressValidator,
   profileUpdateValidator,
   registerValidator,
@@ -71,6 +75,7 @@ router.use(authenticate, allowCustomerOnly);
 
 router.get('/profile', getProfile);
 router.put('/profile', profileUpdateValidator, updateProfile);
+router.post('/profile/deactivate', deactivateAccount);
 
 router.get('/addresses', listAddresses);
 router.post('/addresses', addressCreateValidator, createAddress);
@@ -95,10 +100,12 @@ router.post('/time-slots/check', timeSlotCheckValidator, checkTimeSlot);
 router.post('/orders', orderCreateValidator, placeOrder);
 router.get('/orders', orderHistoryQueryValidator, listOrders);
 router.get('/orders/:orderId', orderIdValidator, getOrder);
+router.get('/orders/:orderId/jobcard', orderIdValidator, getJobCard);
 router.get('/orders/:orderId/technician', orderIdValidator, getTechnicianStatus);
 router.get('/orders/:orderId/additional', orderIdValidator, getAdditionalItems);
 router.post('/orders/:orderId/approve', approvalDecisionValidator, approveAdditionalItems);
 router.post('/orders/:orderId/reject', approvalDecisionValidator, rejectAdditionalItems);
+router.post('/orders/:orderId/messages', orderMessageValidator, postOrderMessage);
 router.post(
   '/orders/:orderId/rating',
   validate([

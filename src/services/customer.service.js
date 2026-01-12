@@ -42,15 +42,51 @@ const addHistoryEntry = async ({ orderId, action, message, metadata, performedBy
 
 export const CustomerService = {
   async register(payload) {
-    const exists = await User.findOne({ $or: [{ email: payload.email.toLowerCase() }, { mobile: payload.phone }] });
-    if (exists) {
-      throw new ApiError(409, 'Account already exists. Please login');
+    const email = payload.email.toLowerCase();
+    const phone = payload.phone;
+    const existing = await User.findOne({
+      $or: [{ email }, { mobile: phone }],
+      role: USER_ROLES.CUSTOMER
+    });
+
+    if (existing) {
+      if (existing.status === 'active') {
+        throw new ApiError(409, 'Account already exists. Please login');
+      }
+      // Reactivate existing inactive account
+      existing.name = payload.name;
+      existing.email = email;
+      existing.mobile = phone;
+      existing.password = payload.password; // will be hashed by pre-save hook
+      existing.status = 'active';
+      await existing.save();
+
+      await CustomerProfile.findOneAndUpdate(
+        { user: existing._id },
+        {
+          $set: {
+            displayName: existing.name,
+            email: existing.email,
+            phone: existing.mobile
+          }
+        },
+        { new: true, upsert: true }
+      );
+
+      await notificationService.notifyCustomer(existing._id, NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED, {
+        recipient: existing._id,
+        message: 'Welcome back to Fixzep! Your account has been reactivated.'
+      });
+
+      const token = buildToken(existing);
+      return { token, user: sanitizeUser(existing) };
     }
 
+    // Create new account
     const user = await User.create({
       name: payload.name,
-      email: payload.email.toLowerCase(),
-      mobile: payload.phone,
+      email,
+      mobile: phone,
       password: payload.password,
       role: USER_ROLES.CUSTOMER
     });
@@ -77,6 +113,9 @@ export const CustomerService = {
       : { mobile: identifier, role: USER_ROLES.CUSTOMER };
     const user = await User.findOne(query).select('+password');
     if (!user) throw new ApiError(401, 'Invalid credentials');
+    if (user.status !== 'active') {
+      throw new ApiError(403, 'Account is inactive. Please Signup Again.');
+    }
     const match = await user.comparePassword(password);
     if (!match) throw new ApiError(401, 'Invalid credentials');
     const token = buildToken(user);
@@ -149,6 +188,12 @@ export const CustomerService = {
       );
     }
     return sanitizeUser(user);
+  },
+
+  async deactivateAccount(customerId) {
+    const user = await User.findByIdAndUpdate(customerId, { status: 'inactive' }, { new: true });
+    if (!user) throw new ApiError(404, 'Customer not found');
+    return { deactivated: true };
   },
 
   async listAddresses(customerId) {
@@ -517,12 +562,14 @@ export const CustomerService = {
 
   async initializePayment(customerId, payload) {
     const order = await this.getOrderById(customerId, payload.orderId);
+    console.log('Order for payment initialization:', payload);
     const payment = await PaymentService.initializeCustomerPayment({
       orderId: order._id,
       customerId,
       method: payload.method,
       amount: payload.amount
     });
+    console.log('Initialized payment:', payment);
     return payment;
   },
 
@@ -544,6 +591,36 @@ export const CustomerService = {
     const payment = await Payment.findOne({ _id: paymentId, customer: customerId });
     if (!payment) throw new ApiError(404, 'Payment not found');
     return payment;
+  },
+
+  async getJobCardForCustomer(customerId, orderId) {
+    const order = await Order.findOne({ _id: orderId, customerUser: customerId });
+    if (!order) throw new ApiError(404, 'Order not found');
+    const jobCard = await JobCard.findOne({ order: orderId }).lean();
+    if (!jobCard) throw new ApiError(404, 'Job card not found');
+    return {
+      estimateAmount: jobCard.estimateAmount || 0,
+      additionalCharges: jobCard.additionalCharges || 0,
+      finalAmount: jobCard.finalAmount || 0,
+      paymentStatus: jobCard.paymentStatus || 'pending',
+      status: jobCard.status,
+      extraWork: (jobCard.extraWork || []).map((w) => ({ description: w.description, amount: w.amount })),
+      spareParts: (jobCard.sparePartsUsed || []).map((p) => ({ quantity: p.quantity, unitPrice: p.unitPrice }))
+    };
+  },
+
+  async sendOrderMessage(customerId, orderId, message) {
+    const order = await Order.findOne({ _id: orderId, customerUser: customerId });
+    if (!order) throw new ApiError(404, 'Order not found');
+    const trimmed = (message || '').trim();
+    if (!trimmed) throw new ApiError(400, 'Message is required');
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'chat_message',
+      message: trimmed,
+      performedBy: customerId
+    });
+    return { ok: true };
   },
 
   async getHistory(customerId, filters = {}) {

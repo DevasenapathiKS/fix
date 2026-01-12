@@ -61,7 +61,7 @@ export const bannerService = {
       },
     })
     // Construct full image URL using API base URL
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://admin.eopsys.xyz/api'
     const imageUrl = data.data.imageUrl
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${apiBaseUrl.replace('/api', '')}${imageUrl}`
     return fullImageUrl
