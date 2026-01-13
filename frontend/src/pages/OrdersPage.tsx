@@ -203,12 +203,12 @@ export const OrdersPage = () => {
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [selectedCalendarSlot, setSelectedCalendarSlot] = useState<{
+  const [selectedCalendarSlots, setSelectedCalendarSlots] = useState<Array<{
     date: Date;
     startTime: string;
     endTime: string;
     label: string;
-  } | null>(null);
+  }>>([]);
   const [jobStatusChoice, setJobStatusChoice] = useState('');
   const [paymentStatusChoice, setPaymentStatusChoice] = useState<PaymentStatusValue | ''>('');
   const [followUpReason, setFollowUpReason] = useState('');
@@ -242,11 +242,11 @@ export const OrdersPage = () => {
   const closeAssignModal = () => {
     setAssignModal({ order: null, open: false });
     setScheduleDrawer({ open: false, technicianId: null, name: '' });
-    setSelectedCalendarSlot(null);
+    setSelectedCalendarSlots([]);
   };
 
   const openSchedulePanel = (technician: TechnicianCandidate) => {
-    setSelectedCalendarSlot(null); // Clear any previously selected slot
+    setSelectedCalendarSlots([]); // Clear any previously selected slots
     setScheduleDrawer({
       open: true,
       technicianId: technician.id,
@@ -2370,34 +2370,51 @@ export const OrdersPage = () => {
             </div>
 
             {/* Assign Button - Always visible */}
-            <div className={`rounded-xl border-2 p-4 ${selectedCalendarSlot ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+            <div className={`rounded-xl border-2 p-4 ${selectedCalendarSlots.length > 0 ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  {selectedCalendarSlot ? (
+                  {selectedCalendarSlots.length > 0 ? (
                     <>
-                      <p className="text-xs uppercase tracking-wide text-emerald-600 font-semibold">Selected time slot</p>
-                      <p className="text-sm font-semibold text-emerald-900 mt-1">
-                        {selectedCalendarSlot.label || `${selectedCalendarSlot.startTime} - ${selectedCalendarSlot.endTime}`}
-                      </p>
-                      <p className="text-xs text-emerald-700 mt-0.5">
-                        {selectedCalendarSlot.date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        {selectedCalendarSlot.startTime} → {selectedCalendarSlot.endTime}
-                      </p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600 font-semibold">Selected time slots ({selectedCalendarSlots.length})</p>
                       {(() => {
-                        const orderStart = assignModal.order?.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
-                        const orderEnd = assignModal.order?.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
-                        const selectedStart = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.startTime);
-                        const selectedEnd = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.endTime);
-                        const isSameSlot = orderStart && orderEnd &&
-                          selectedStart.getTime() === orderStart.getTime() &&
-                          selectedEnd.getTime() === orderEnd.getTime();
+                        const first = selectedCalendarSlots[0];
+                        const sameDay = selectedCalendarSlots.every(s => s.date.toDateString() === first.date.toDateString());
+                        const sorted = [...selectedCalendarSlots].sort((a, b) => {
+                          const aStart = buildSlotDateTime(a.date, a.startTime).getTime();
+                          const bStart = buildSlotDateTime(b.date, b.startTime).getTime();
+                          return aStart - bStart;
+                        });
+                        const effectiveStart = buildSlotDateTime(sorted[0].date, sorted[0].startTime);
+                        const effectiveEnd = buildSlotDateTime(sorted[sorted.length - 1].date, sorted[sorted.length - 1].endTime);
 
-                        return isSameSlot ? (
-                          <p className="text-xs text-emerald-800 mt-2 font-medium">✓ Same as current order slot</p>
-                        ) : (
-                          <p className="text-xs text-amber-600 mt-2 font-medium">⚠ Order will be rescheduled to this slot</p>
+                        return (
+                          <>
+                            <p className="text-sm font-semibold text-emerald-900 mt-1">
+                              {sameDay ? sorted[0].date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) : 'Multiple days selected'}
+                            </p>
+                            <p className="text-xs text-emerald-700 mt-0.5">
+                              Effective window: {effectiveStart.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} → {effectiveEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                              {sorted.map((s) => (
+                                <li key={`${s.date.toISOString()}-${s.startTime}-${s.endTime}`} className="text-xs text-emerald-600">
+                                  {s.label || `${s.startTime} - ${s.endTime}`}
+                                </li>
+                              ))}
+                            </ul>
+                            {(() => {
+                              const orderStart = assignModal.order?.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
+                              const orderEnd = assignModal.order?.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
+                              const isSameSlot = orderStart && orderEnd &&
+                                effectiveStart.getTime() === orderStart.getTime() &&
+                                effectiveEnd.getTime() === orderEnd.getTime();
+                              return isSameSlot ? (
+                                <p className="text-xs text-emerald-800 mt-2 font-medium">✓ Same as current order window</p>
+                              ) : (
+                                <p className="text-xs text-amber-600 mt-2 font-medium">⚠ Order will be rescheduled to this window</p>
+                              );
+                            })()}
+                          </>
                         );
                       })()}
                     </>
@@ -2413,10 +2430,21 @@ export const OrdersPage = () => {
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={() => {
-                      if (!scheduleDrawer.technicianId || !assignModal.order || !selectedCalendarSlot) return;
+                      if (!scheduleDrawer.technicianId || !assignModal.order || selectedCalendarSlots.length === 0) return;
 
-                      const selectedStart = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.startTime);
-                      const selectedEnd = buildSlotDateTime(selectedCalendarSlot.date, selectedCalendarSlot.endTime);
+                      const first = selectedCalendarSlots[0];
+                      const sameDay = selectedCalendarSlots.every(s => s.date.toDateString() === first.date.toDateString());
+                      if (!sameDay) {
+                        toast.error('Please select slots from a single day');
+                        return;
+                      }
+                      const sorted = [...selectedCalendarSlots].sort((a, b) => {
+                        const aStart = buildSlotDateTime(a.date, a.startTime).getTime();
+                        const bStart = buildSlotDateTime(b.date, b.startTime).getTime();
+                        return aStart - bStart;
+                      });
+                      const selectedStart = buildSlotDateTime(sorted[0].date, sorted[0].startTime);
+                      const selectedEnd = buildSlotDateTime(sorted[sorted.length - 1].date, sorted[sorted.length - 1].endTime);
 
                       const orderStart = assignModal.order.timeWindowStart ? new Date(assignModal.order.timeWindowStart) : null;
                       const orderEnd = assignModal.order.timeWindowEnd ? new Date(assignModal.order.timeWindowEnd) : null;
@@ -2439,15 +2467,15 @@ export const OrdersPage = () => {
                       }
                     }}
                     loading={assignWithSlotMutation.isPending || assignMutation.isPending}
-                    disabled={!selectedCalendarSlot || assignWithSlotMutation.isPending || assignMutation.isPending}
+                    disabled={selectedCalendarSlots.length === 0 || assignWithSlotMutation.isPending || assignMutation.isPending}
                     className="whitespace-nowrap"
                   >
                     {assignWithSlotMutation.isPending || assignMutation.isPending ? 'Assigning...' : 'Assign Technician'}
                   </Button>
-                  {selectedCalendarSlot && (
+                  {selectedCalendarSlots.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setSelectedCalendarSlot(null)}
+                      onClick={() => setSelectedCalendarSlots([])}
                       className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
                     >
                       Clear selection
@@ -2537,11 +2565,12 @@ export const OrdersPage = () => {
 
                         const canSelect = !isBlocked && !isSlotPast && assignModal.order && scheduleDrawer.technicianId;
 
-                        // Check if this slot is currently selected
-                        const isSelected = selectedCalendarSlot &&
-                          selectedCalendarSlot.date.toDateString() === day.toDateString() &&
-                          selectedCalendarSlot.startTime === slot.startTime &&
-                          selectedCalendarSlot.endTime === slot.endTime;
+                        // Check if this slot is currently selected (multi-select)
+                        const isSelected = selectedCalendarSlots.some(s =>
+                          s.date.toDateString() === day.toDateString() &&
+                          s.startTime === slot.startTime &&
+                          s.endTime === slot.endTime
+                        );
 
                         return (
                           <button
@@ -2553,15 +2582,26 @@ export const OrdersPage = () => {
                               e.preventDefault();
                               if (!canSelect) return;
 
-                              // Toggle selection
+                              // Toggle selection (multi-select, single-day)
                               if (isSelected) {
-                                setSelectedCalendarSlot(null);
+                                setSelectedCalendarSlots(prev => prev.filter(s =>
+                                  !(s.date.toDateString() === day.toDateString() && s.startTime === slot.startTime && s.endTime === slot.endTime)
+                                ));
                               } else {
-                                setSelectedCalendarSlot({
-                                  date: day,
-                                  startTime: slot.startTime,
-                                  endTime: slot.endTime,
-                                  label: slot.label || `${slot.startTime} - ${slot.endTime}`
+                                setSelectedCalendarSlots(prev => {
+                                  if (prev.length > 0 && prev[0].date.toDateString() !== day.toDateString()) {
+                                    toast.error('Please select slots from a single day');
+                                    return prev;
+                                  }
+                                  return [
+                                    ...prev,
+                                    {
+                                      date: day,
+                                      startTime: slot.startTime,
+                                      endTime: slot.endTime,
+                                      label: slot.label || `${slot.startTime} - ${slot.endTime}`
+                                    }
+                                  ];
                                 });
                               }
                             }}
