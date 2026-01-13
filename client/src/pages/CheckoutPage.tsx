@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
+import { formatInTimeZone } from "date-fns-tz";
 import { PlusIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { useCartStore } from '../store/cartStore'
 import { orderService } from '../services/orderService'
@@ -58,7 +59,6 @@ export const CheckoutPage = () => {
     queryKey: ['timeSlots', format(today, 'yyyy-MM-dd')],
     queryFn: () => timeSlotService.getTimeSlots(format(today, 'yyyy-MM-dd'), 365),
   })
-
 
   const [calendarMonth, setCalendarMonth] = useState<Date>(today)
   const [selectedDateObj, setSelectedDateObj] = useState<Date | null>(null)
@@ -480,7 +480,7 @@ export const CheckoutPage = () => {
                               >
                                 {/* <div className="font-semibold">{slot.label}</div> */}
                                 <div className="text-xs mt-1">
-                                  {format(new Date(slot.start), 'hh:mm a')} - {format(new Date(slot.end), 'hh:mm a')}
+                                  {formatInTimeZone(slot.start,"UTC","hh:mm a")} - {formatInTimeZone(slot.end,"UTC", 'hh:mm a')}
                                 </div>
                               </button>
                             )
