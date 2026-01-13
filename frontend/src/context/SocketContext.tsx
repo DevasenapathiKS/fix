@@ -51,7 +51,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(true);
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
