@@ -1046,6 +1046,15 @@ export const AdminService = {
       });
     }
 
+    // Notify customer when cancellation is approved
+    if (status === ORDER_STATUS.CANCELLED && order.customerUser) {
+      await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.ORDER_CANCELLED, {
+        recipient: order.customerUser,
+        orderId,
+        reason
+      });
+    }
+
     return this.getJobCardDetail(orderId);
   },
 

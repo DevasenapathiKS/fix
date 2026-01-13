@@ -48,6 +48,7 @@ const statusFilterOptions = [
   { value: 'assigned', label: 'Assigned' },
   { value: 'in_progress', label: 'In progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'cancellation_requested', label: 'Cancellation requested' },
   { value: 'follow_up', label: 'Follow up' },
   { value: 'unpaid', label: 'Unpaid' },
   { value: 'partially_paid', label: 'Partially paid' }
@@ -55,8 +56,7 @@ const statusFilterOptions = [
 
 const jobStatusOptions = [
   { value: 'follow_up', label: 'Follow up' },
-  { value: 'unpaid', label: 'Unpaid' },
-  { value: 'partially_paid', label: 'Partially paid' },
+  { value: 'inProgrss', label: 'inProgress' },
   { value: 'completed', label: 'Complete' }
 ];
 const jobStatusValues = jobStatusOptions.map((option) => option.value);
@@ -1189,30 +1189,56 @@ export const OrdersPage = () => {
                     <Badge variant={order.status}>{order.status.replace(/_/g, ' ')}</Badge>
                   </td>
                   <td className="px-4 py-4 text-right">
-                    {order.status !== 'completed' ? (
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setRescheduleModal({ order, open: true });
-                        }}
-                        className="text-xs"
-                      >
-                        Reschedule
-                      </Button>
-                      <Button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAssignModal({ order, open: true });
-                        }}
-                        className="text-xs"
-                      >
-                        {order.assignedTechnician ? 'Reassign' : 'Assign'}
-                      </Button>
-                    </div>
-                    ) : (
+                    {order.status === 'completed' ? (
                       <span className="text-xs text-slate-400">Completed</span>
+                    ) : order.status === 'cancellation_requested' ? (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            const reason = window.prompt('Optional: Add a note for approving cancellation') || undefined;
+                            statusMutation.mutate({ orderId: order._id, status: 'cancelled', reason: reason?.trim() || undefined });
+                          }}
+                          className="text-xs"
+                        >
+                          Approve Cancel
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            const reason = window.prompt('Optional: Add a note for rejecting cancellation') || undefined;
+                            const fallbackStatus = order.assignedTechnician ? 'assigned' : 'pending_assignment';
+                            statusMutation.mutate({ orderId: order._id, status: fallbackStatus, reason: reason?.trim() || undefined });
+                          }}
+                          className="text-xs"
+                        >
+                          Reject Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRescheduleModal({ order, open: true });
+                          }}
+                          className="text-xs"
+                        >
+                          Reschedule
+                        </Button>
+                        <Button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setAssignModal({ order, open: true });
+                          }}
+                          className="text-xs"
+                        >
+                          {order.assignedTechnician ? 'Reassign' : 'Assign'}
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

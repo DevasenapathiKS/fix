@@ -148,7 +148,7 @@ export const getInvoice = asyncHandler(async (req, res) => {
 
 export const cancelOrder = asyncHandler(async (req, res) => {
   const order = await CustomerService.cancelOrder(req.user.id, req.params.orderId, req.body.reason);
-  return successResponse(res, { data: order, message: 'Order cancelled successfully' });
+  return successResponse(res, { data: order, message: 'Cancellation request submitted for admin review' });
 });
 
 export const getJobCard = asyncHandler(async (req, res) => {

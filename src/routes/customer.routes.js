@@ -91,7 +91,7 @@ router.get(
   '/time-slots',
   validate([
     query('startDate').optional().isISO8601().withMessage('startDate must be ISO8601'),
-    query('days').optional().isInt({ min: 1, max: 30 }).withMessage('days must be between 1-30')
+    query('days').optional().isInt({ min: 1, max: 365 }).withMessage('days must be between 1-365')
   ]),
   listTimeSlots
 );

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { PlusIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
@@ -12,7 +12,7 @@ import { useAuthStore } from '../store/authStore'
 import { addressService, timeSlotService, type Address, type TimeSlot } from '../services/addressService'
 import { validateAddress } from '../services/serviceAreaService'
 import { AddressModal } from '../components/address/AddressModal'
-import { format } from 'date-fns'
+import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, isSameMonth, isSameDay, isBefore, isAfter } from 'date-fns'
 
 interface CheckoutFormData {
   selectedAddressId: string
@@ -52,10 +52,16 @@ export const CheckoutPage = () => {
   })
 
   // Fetch time slots for the next 7 days
+  const today = new Date()
+  const maxBookingDate = addDays(today, 365)
   const { data: timeSlots, isLoading: loadingSlots } = useQuery({
-    queryKey: ['timeSlots'],
-    queryFn: () => timeSlotService.getTimeSlots(undefined, 7),
+    queryKey: ['timeSlots', format(today, 'yyyy-MM-dd')],
+    queryFn: () => timeSlotService.getTimeSlots(format(today, 'yyyy-MM-dd'), 365),
   })
+
+
+  const [calendarMonth, setCalendarMonth] = useState<Date>(today)
+  const [selectedDateObj, setSelectedDateObj] = useState<Date | null>(null)
 
   // Set default address
   useEffect(() => {
@@ -88,19 +94,10 @@ export const CheckoutPage = () => {
     runValidation()
   }, [addresses, setValue])
 
-  const createOrderMutation = useMutation({
-    mutationFn: orderService.createOrder,
-    onSuccess: (order) => {
-      clearCart()
-      toast.success('Order placed successfully!')
-      navigate(`/orders/${order._id}`)
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to place order')
-    },
-  })
+  // We'll place one order per cart item
+  const [placingOrders, setPlacingOrders] = useState(false)
 
-  const onSubmit = (data: CheckoutFormData) => {
+  const onSubmit = async (data: CheckoutFormData) => {
     if (!user) {
       toast.error('Please login to place an order')
       navigate('/')
@@ -123,20 +120,42 @@ export const CheckoutPage = () => {
       return
     }
 
-    const orderData: CreateOrderData = {
-      services: items.map((item) => ({
-        serviceItem: item.serviceId,
-        serviceCategory: item.categoryId,
-        quantity: item.quantity,
-        issueDescription: data.notes,
-      })),
-      customerAddressId: selectedAddress._id,
-      preferredStart: selectedSlot.slot.start,
-      preferredEnd: selectedSlot.slot.end,
-      estimatedCost: totalWithGST,
-    }
+    const payloads: CreateOrderData[] = items.map((item) => {
+      const subtotal = item.price * item.quantity
+      const gst = subtotal * gstRate
+      const estimatedCost = +(subtotal + gst + serviceCharges)
+      return {
+        services: [{
+          serviceItem: item.serviceId,
+          serviceCategory: item.categoryId,
+          quantity: item.quantity,
+          issueDescription: data.notes,
+        }],
+        customerAddressId: selectedAddress._id,
+        preferredStart: selectedSlot.slot.start,
+        preferredEnd: selectedSlot.slot.end,
+        estimatedCost,
+      }
+    })
 
-    createOrderMutation.mutate(orderData)
+    setPlacingOrders(true)
+    try {
+      const results = await Promise.allSettled(payloads.map((p) => orderService.createOrder(p)))
+      const successes = results.filter((r) => r.status === 'fulfilled').length
+      const failures = results.length - successes
+      if (successes > 0) {
+        toast.success(`Placed ${successes} order${successes > 1 ? 's' : ''} successfully`)
+        clearCart()
+        navigate('/orders')
+      }
+      if (failures > 0) {
+        toast.error(`Failed to place ${failures} order${failures > 1 ? 's' : ''}`)
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to place orders')
+    } finally {
+      setPlacingOrders(false)
+    }
   }
 
   const handleAddressSelect = async (address: Address) => {
@@ -162,6 +181,108 @@ export const CheckoutPage = () => {
     setValue('selectedDate', date)
     setValue('selectedSlotStart', slot.start)
     setValue('selectedSlotEnd', slot.end)
+  }
+
+  // Build a map of date -> slots for quick access
+  const slotsByDate = (timeSlots || []).reduce<Record<string, TimeSlot[]>>((acc, day) => {
+    const key = format(new Date(day.date), 'yyyy-MM-dd')
+    acc[key] = day.slots || []
+    return acc
+  }, {})
+
+  // Auto-select earliest available date on load
+  useEffect(() => {
+    if (!timeSlots || timeSlots.length === 0) return
+    const firstWithSlots = timeSlots.find((d) => d.slots && d.slots.length > 0)
+    if (firstWithSlots) {
+      const d = new Date(firstWithSlots.date)
+      setSelectedDateObj(d)
+    }
+  }, [timeSlots])
+
+  const onPrevMonth = () => {
+    const prev = subMonths(calendarMonth, 1)
+    // Prevent navigating before today
+    if (isBefore(endOfMonth(prev), today)) return
+    setCalendarMonth(prev)
+  }
+
+  const onNextMonth = () => {
+    const next = addMonths(calendarMonth, 1)
+    // Prevent navigating beyond maxBookingDate window
+    if (isAfter(startOfMonth(next), maxBookingDate)) return
+    setCalendarMonth(next)
+  }
+
+  const renderCalendar = () => {
+    const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 })
+    const end = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 })
+    const days: Date[] = []
+    let cur = start
+    while (cur <= end) {
+      days.push(cur)
+      cur = addDays(cur, 1)
+    }
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            onClick={onPrevMonth}
+            className="px-2 py-1 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+            disabled={isBefore(endOfMonth(subMonths(calendarMonth, 1)), today)}
+          >
+            ←
+          </button>
+          <div className="font-semibold text-gray-900">{format(calendarMonth, 'MMMM yyyy')}</div>
+          <button
+            type="button"
+            onClick={onNextMonth}
+            className="px-2 py-1 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+            disabled={isAfter(startOfMonth(addMonths(calendarMonth, 1)), maxBookingDate)}
+          >
+            →
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">
+          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => (
+            <div key={d} className="text-center py-1">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day) => {
+            const dayKey = format(day, 'yyyy-MM-dd')
+            const inRange = !isBefore(day, today) && !isAfter(day, maxBookingDate)
+            const inMonth = isSameMonth(day, calendarMonth)
+            const hasSlots = Boolean(slotsByDate[dayKey]?.length)
+            const disabled = !inRange || !hasSlots
+            const isSelected = selectedDateObj && isSameDay(day, selectedDateObj)
+            return (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => {
+                  if (disabled) return
+                  setSelectedDateObj(day)
+                  setSelectedSlot(null)
+                }}
+                className={
+                  `h-10 rounded-md text-sm transition-colors ` +
+                  `${disabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-800 hover:bg-primary-50'} ` +
+                  `${!inMonth ? 'opacity-50' : ''} ` +
+                  `${isSelected ? 'bg-primary-100 text-primary-900 font-semibold' : ''}`
+                }
+                aria-disabled={disabled}
+              >
+                <div>{format(day, 'd')}</div>
+                {hasSlots && <div className="mx-auto mt-0.5 h-1.5 w-1.5 rounded-full bg-primary-500" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   if (items.length === 0) {
@@ -278,56 +399,96 @@ export const CheckoutPage = () => {
 
             {/* Time Slot Selection */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Select Date & Time Slot
-              </h2>
-
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Select Date & Time Slot</h2>
               {loadingSlots ? (
                 <div className="animate-pulse space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-32 bg-gray-200 rounded"></div>
-                  ))}
+                  <div className="h-40 bg-gray-200 rounded"></div>
+                  <div className="h-16 bg-gray-200 rounded"></div>
                 </div>
               ) : !timeSlots || timeSlots.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No time slots available</p>
               ) : (
-                <div className="space-y-6">
-                  {timeSlots.map((daySlot) => (
-                    <div key={daySlot.date} className="border-b pb-4 last:border-b-0">
-                      <h3 className="font-semibold text-gray-900 mb-3">
-                        {format(new Date(daySlot.date), 'EEEE, MMMM dd, yyyy')}
-                      </h3>
-                      {daySlot.slots.length === 0 ? (
-                        <p className="text-sm text-gray-500">No slots available</p>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {daySlot.slots.map((slot, idx) => {
-                            const isSelected =
-                              selectedSlot?.date === daySlot.date &&
-                              selectedSlot?.slot.start === slot.start
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>{renderCalendar()}</div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-3">
+                      {selectedDateObj ? format(selectedDateObj, 'EEEE, MMMM dd, yyyy') : 'Select a date'}
+                    </h3>
+                    {(() => {
+                      const hasAnySlots = (timeSlots || []).some((d) => d.slots && d.slots.length > 0)
+                      if (!hasAnySlots) {
+                        return (
+                          <div className="text-center py-8">
+                            <p className="text-sm text-amber-600">No time slots are configured for the next 31 days.</p>
+                            <p className="text-xs text-gray-500 mt-1">Please try again later or contact support.</p>
+                          </div>
+                        )
+                      }
+
+                      if (!selectedDateObj) {
+                        return <p className="text-sm text-gray-500">Choose a date to view available slots.</p>
+                      }
+
+                      const key = format(selectedDateObj, 'yyyy-MM-dd')
+                      const slots = slotsByDate[key] || []
+
+                      if (slots.length === 0) {
+                        const findNextAvailable = () => {
+                          const from = selectedDateObj
+                          let next: Date | null = null
+                          for (const d of timeSlots || []) {
+                            const dDate = new Date(d.date)
+                            if (isAfter(dDate, from) && d.slots && d.slots.length > 0) {
+                              next = dDate
+                              break
+                            }
+                          }
+                          return next
+                        }
+                        const nextAvailable = findNextAvailable()
+                        return (
+                          <div>
+                            <p className="text-sm text-gray-500 mb-3">No slots available on this day.</p>
+                            {nextAvailable && (
+                              <button
+                                type="button"
+                                className="text-sm font-medium text-primary-600 hover:text-primary-700 underline"
+                                onClick={() => { setSelectedDateObj(nextAvailable); setSelectedSlot(null) }}
+                              >
+                                Jump to next available date
+                              </button>
+                            )}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {slots.map((slot, idx) => {
+                            const dateStr = selectedDateObj.toISOString()
+                            const isSelected = selectedSlot?.date === dateStr && selectedSlot?.slot.start === slot.start
                             return (
                               <button
                                 key={idx}
                                 type="button"
-                                onClick={() => handleSlotSelect(daySlot.date, slot)}
+                                onClick={() => handleSlotSelect(dateStr, slot)}
                                 className={`p-3 border-2 rounded-lg text-sm font-medium transition-all ${
                                   isSelected
                                     ? 'border-primary-600 bg-primary-50 text-primary-700'
                                     : 'border-gray-200 hover:border-primary-300 text-gray-700'
                                 }`}
                               >
-                                <div className="font-semibold">{slot.label}</div>
+                                {/* <div className="font-semibold">{slot.label}</div> */}
                                 <div className="text-xs mt-1">
-                                  {format(new Date(slot.start), 'hh:mm a')} -{' '}
-                                  {format(new Date(slot.end), 'hh:mm a')}
+                                  {format(new Date(slot.start), 'hh:mm a')} - {format(new Date(slot.end), 'hh:mm a')}
                                 </div>
                               </button>
                             )
                           })}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      )
+                    })()}
+                  </div>
                 </div>
               )}
             </div>
@@ -416,10 +577,10 @@ export const CheckoutPage = () => {
 
               <button
                 onClick={handleSubmit(onSubmit)}
-                disabled={createOrderMutation.isPending || !selectedAddress || !selectedSlot}
+                disabled={placingOrders || !selectedAddress || !selectedSlot}
                 className="w-full mt-6 bg-primary-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {createOrderMutation.isPending ? 'Placing Order...' : 'Place Order'}
+                {placingOrders ? 'Placing Orders...' : 'Place Orders'}
               </button>
             </div>
           </div>

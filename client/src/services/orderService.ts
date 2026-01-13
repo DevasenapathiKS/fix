@@ -72,8 +72,8 @@ export const orderService = {
     return response.data.data
   },
 
-  cancelOrder: async (orderId: string): Promise<Order> => {
-    const response = await apiClient.patch(`/customer/orders/${orderId}/cancel`)
+  cancelOrder: async (orderId: string, reason?: string): Promise<Order> => {
+    const response = await apiClient.post(`/customer/orders/${orderId}/cancel`, reason ? { reason } : {})
     return response.data.data
   },
 

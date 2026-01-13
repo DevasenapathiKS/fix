@@ -9,7 +9,7 @@ import { useCartStore } from '../store/cartStore'
 import { toast } from 'react-hot-toast'
 
 export const TopRatedServices = () => {
-  const { addItem } = useCartStore()
+  const { addItem, items, updateQuantity } = useCartStore()
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['services'],
@@ -53,6 +53,11 @@ export const TopRatedServices = () => {
       imageUrl: service.imageUrl,
     })
     toast.success(`${service.name} added to cart!`)
+  }
+
+  const getQuantity = (serviceId: string) => {
+    const found = items.find((i) => i.serviceId === serviceId)
+    return found?.quantity || 0
   }
 
   if (isLoading) {
@@ -151,13 +156,37 @@ export const TopRatedServices = () => {
                 </span>
               </div>
 
-              {/* Add to Cart Button */}
-              <button
-                onClick={() => handleAddToCart(service)}
-                className="mt-3 w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors font-medium text-sm flex items-center justify-center"
-              >
-                Add to Cart
-              </button>
+              {/* Add to Cart or Quantity Controls */}
+              {getQuantity(service._id) === 0 ? (
+                <button
+                  onClick={() => handleAddToCart(service)}
+                  className="mt-3 w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors font-medium text-sm flex items-center justify-center"
+                >
+                  Add to Cart
+                </button>
+              ) : (
+                <div className="mt-3 flex items-center justify-center">
+                  <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => updateQuantity(service._id, getQuantity(service._id) - 1)}
+                      className="px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                      aria-label="Decrease quantity"
+                    >
+                      −
+                    </button>
+                    <span className="px-4 py-2 text-sm font-semibold text-gray-900 bg-white">
+                      {getQuantity(service._id)}
+                    </span>
+                    <button
+                      onClick={() => updateQuantity(service._id, getQuantity(service._id) + 1)}
+                      className="px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

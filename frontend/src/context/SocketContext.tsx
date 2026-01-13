@@ -21,7 +21,9 @@ export const SOCKET_EVENTS = {
   TECHNICIAN_CHECKED_IN: 'TECHNICIAN_CHECKED_IN',
   CUSTOMER_APPROVAL_REQUIRED: 'CUSTOMER_APPROVAL_REQUIRED',
   CUSTOMER_APPROVAL_UPDATED: 'CUSTOMER_APPROVAL_UPDATED',
-  TECHNICIAN_UNASSIGNED: 'TECHNICIAN_UNASSIGNED'
+  TECHNICIAN_UNASSIGNED: 'TECHNICIAN_UNASSIGNED',
+  ORDER_CANCELLATION_REQUESTED: 'ORDER_CANCELLATION_REQUESTED',
+  ORDER_CANCELLED: 'ORDER_CANCELLED'
 } as const;
 
 interface SocketContextType {
@@ -173,6 +175,14 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         message = 'Technician unassigned from order';
         icon = <span className="text-xl">🔄</span>;
         break;
+      case SOCKET_EVENTS.ORDER_CANCELLATION_REQUESTED:
+        message = `Cancellation requested${payload.orderCode ? `: #${payload.orderCode}` : ''}`;
+        icon = <span className="text-xl">🛑</span>;
+        break;
+      case SOCKET_EVENTS.ORDER_CANCELLED:
+        message = `Order cancelled${payload.orderCode ? `: #${payload.orderCode}` : ''}`;
+        icon = <span className="text-xl">❌</span>;
+        break;
       default:
         message = 'New notification received';
     }
@@ -249,8 +259,13 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         addNotification(event, payload);
         showToastNotification(event, payload);
 
-        // Play notification sound for new orders
-        if (event === SOCKET_EVENTS.ORDER_CREATED || event === SOCKET_EVENTS.CUSTOMER_ORDER_PLACED) {
+        // Play notification sound for important events
+        if (
+          event === SOCKET_EVENTS.ORDER_CREATED ||
+          event === SOCKET_EVENTS.CUSTOMER_ORDER_PLACED ||
+          event === SOCKET_EVENTS.ORDER_CANCELLATION_REQUESTED ||
+          event === SOCKET_EVENTS.ORDER_CANCELLED
+        ) {
           playNotificationSound();
         }
 
@@ -264,7 +279,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
           if (payload?.orderId) {
             queryClient.invalidateQueries({ queryKey: ['order-jobcard', payload.orderId] });
           }
-        } else if (event === SOCKET_EVENTS.JOB_UPDATED) {
+        } else if (event === SOCKET_EVENTS.JOB_UPDATED || event === SOCKET_EVENTS.ORDER_CANCELLATION_REQUESTED || event === SOCKET_EVENTS.ORDER_CANCELLED) {
           queryClient.invalidateQueries({ queryKey: ['orders'] });
           if (payload?.orderId) {
             queryClient.invalidateQueries({ queryKey: ['order-jobcard', payload.orderId] });

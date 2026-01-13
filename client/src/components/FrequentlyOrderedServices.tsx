@@ -13,7 +13,7 @@ import { useCartStore } from '../store/cartStore'
 import { toast } from 'react-hot-toast'
 
 export const FrequentlyOrderedServices = () => {
-  const { addItem } = useCartStore()
+  const { addItem, items, updateQuantity } = useCartStore()
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['services'],
@@ -56,6 +56,11 @@ export const FrequentlyOrderedServices = () => {
       imageUrl: service.imageUrl,
     })
     toast.success(`${service.name} added to cart!`)
+  }
+
+  const getQuantity = (serviceId: string) => {
+    const found = items.find((i) => i.serviceId === serviceId)
+    return found?.quantity || 0
   }
 
   if (isLoading) {
@@ -163,16 +168,47 @@ export const FrequentlyOrderedServices = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 mt-auto">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault()
-                      handleAddToCart(service)
-                    }}
-                    className="flex-1 bg-primary-600 text-white py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary-700 transition-colors"
-                  >
-                    Add to Cart
-                  </button>
+                <div className="flex gap-2 mt-auto items-center">
+                  {getQuantity(service._id) === 0 ? (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleAddToCart(service)
+                      }}
+                      className="flex-1 bg-primary-600 text-white py-2 px-3 rounded-lg text-sm font-semibold hover:bg-primary-700 transition-colors"
+                    >
+                      Add to Cart
+                    </button>
+                  ) : (
+                    <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          const q = getQuantity(service._id)
+                          updateQuantity(service._id, q - 1)
+                        }}
+                        className="px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                        aria-label="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <span className="px-4 py-2 text-sm font-semibold text-gray-900 bg-white">
+                        {getQuantity(service._id)}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          const q = getQuantity(service._id)
+                          updateQuantity(service._id, q + 1)
+                        }}
+                        className="px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+
                   <Link
                     to={`/services/${service.categoryId}`}
                     className="flex items-center justify-center bg-gray-100 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors"

@@ -12,7 +12,7 @@ export const ServiceDetailPage = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const highlightedId = searchParams.get('serviceId') || ''
-  const { addItem, items } = useCartStore()
+  const { addItem, items, updateQuantity } = useCartStore()
 
   const { data: categories, isLoading, error } = useQuery({
     queryKey: ['services'],
@@ -23,6 +23,11 @@ export const ServiceDetailPage = () => {
 
   const isInCart = (serviceId: string) => {
     return items.some((item) => item.serviceId === serviceId)
+  }
+
+  const getQuantity = (serviceId: string) => {
+    const found = items.find((i) => i.serviceId === serviceId)
+    return found?.quantity || 0
   }
 
   const handleAddToCart = (service: any) => {
@@ -271,28 +276,41 @@ export const ServiceDetailPage = () => {
                       )}
                     </div>
 
-                    {/* Add to Cart Button */}
-                    <button
-                      onClick={() => handleAddToCart(service)}
-                      disabled={isInCart(service._id)}
-                      className={`w-full py-2.5 px-4 rounded-lg font-medium transition-all flex items-center justify-center ${
-                        isInCart(service._id)
-                          ? 'bg-green-50 text-green-600 cursor-not-allowed'
-                          : 'bg-primary-600 text-white hover:bg-primary-700'
-                      }`}
-                    >
-                      {isInCart(service._id) ? (
-                        <>
-                          <CheckIcon className="w-5 h-5 mr-2" />
-                          Added
-                        </>
-                      ) : (
-                        <>
-                          <PlusIcon className="w-5 h-5 mr-2" />
-                          Add to Cart
-                        </>
-                      )}
-                    </button>
+                    {/* Add to Cart or Quantity Controls */}
+                    {getQuantity(service._id) === 0 ? (
+                      <button
+                        onClick={() => handleAddToCart(service)}
+                        className="w-full py-2.5 px-4 rounded-lg font-medium transition-all flex items-center justify-center bg-primary-600 text-white hover:bg-primary-700"
+                      >
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Add to Cart
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => updateQuantity(service._id, getQuantity(service._id) - 1)}
+                            className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="px-5 py-2 text-sm font-semibold text-gray-900 bg-white">
+                            {getQuantity(service._id)}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(service._id, getQuantity(service._id) + 1)}
+                            className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="text-sm font-medium text-green-700 bg-green-50 px-3 py-1 rounded">
+                          In cart
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

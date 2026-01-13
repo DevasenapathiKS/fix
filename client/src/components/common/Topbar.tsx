@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Menu, Transition } from '@headlessui/react'
-import { ChevronDownIcon } from '@heroicons/react/24/outline'
+import { ChevronDownIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { useAuthStore } from '../../store/authStore'
 import { authService } from '../../services/authService'
 import { LoginModal } from './LoginModal'
@@ -149,9 +149,19 @@ export const Topbar = () => {
           <div className="flex items-center space-x-4">
             {/* Cart Button */}
             <CartButton />
-            
+            {/* Order History Icon */}
+            {token && user && <Link
+              to="/orders"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-700 hover:text-primary-600 hover:border-primary-400 transition-colors"
+              aria-label="Order history"
+            >
+              <ClipboardDocumentListIcon className="w-6 h-6" />
+            </Link>
+            }
+
             {token && user ? (
               <Menu as="div" className="relative inline-block text-left">
+
                 <div>
                   <Menu.Button className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-900 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-lg transition-colors">
                     <span>Welcome, {user.name}</span>
@@ -177,9 +187,8 @@ export const Topbar = () => {
                         {({ active }) => (
                           <Link
                             to="/profile"
-                            className={`${
-                              active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                            } group flex items-center px-4 py-2 text-sm`}
+                            className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                              } group flex items-center px-4 py-2 text-sm`}
                           >
                             <svg
                               className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500"
@@ -202,9 +211,8 @@ export const Topbar = () => {
                         {({ active }) => (
                           <Link
                             to="/orders"
-                            className={`${
-                              active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                            } group flex items-center px-4 py-2 text-sm`}
+                            className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                              } group flex items-center px-4 py-2 text-sm`}
                           >
                             <svg
                               className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500"
@@ -229,9 +237,8 @@ export const Topbar = () => {
                         {({ active }) => (
                           <button
                             onClick={handleLogout}
-                            className={`${
-                              active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
-                            } group flex w-full items-center px-4 py-2 text-sm`}
+                            className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                              } group flex w-full items-center px-4 py-2 text-sm`}
                           >
                             <svg
                               className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500"

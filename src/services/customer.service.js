@@ -158,8 +158,8 @@ export const CustomerService = {
     const response = sanitizeUser(user);
     if (profileDoc) {
       response.profile = {
-          loyaltyTier: profileDoc.loyaltyTier,
-          communicationPreference: profileDoc.preferences?.communication
+        loyaltyTier: profileDoc.loyaltyTier,
+        communicationPreference: profileDoc.preferences?.communication
       };
     }
     return response;
@@ -287,7 +287,7 @@ export const CustomerService = {
 
     // First try to find technicians with the specific service item
     let technicianProfiles = await TechnicianProfile.find({ serviceItems: serviceItem }).select('user');
-    
+
     // If no technicians found for specific service, try service category
     if (technicianProfiles.length === 0) {
       const service = await ServiceItem.findById(serviceItem).select('category');
@@ -295,7 +295,7 @@ export const CustomerService = {
         technicianProfiles = await TechnicianProfile.find({ serviceCategories: service.category }).select('user');
       }
     }
-    
+
     // If still no technicians found, allow order to proceed (admin will assign manually)
     // Orders are created with PENDING_ASSIGNMENT status anyway
     if (technicianProfiles.length === 0) {
@@ -306,7 +306,7 @@ export const CustomerService = {
         requiresManualAssignment: true
       };
     }
-    
+
     const technicianIds = technicianProfiles.map((profile) => profile.user);
 
     const overlapping = await TechnicianCalendar.find({
@@ -316,7 +316,7 @@ export const CustomerService = {
     }).select('technician');
     const busyIds = new Set(overlapping.map((entry) => String(entry.technician)));
     const availableTechnician = technicianIds.find((id) => !busyIds.has(String(id)));
-    
+
     // If all technicians are busy, still allow order (admin can reassign or reschedule)
     return {
       available: true,
@@ -351,11 +351,11 @@ export const CustomerService = {
       // Fetch all service items for cart order
       const serviceIds = payload.services.map(s => s.serviceItem);
       const fetchedServices = await ServiceItem.find({ _id: { $in: serviceIds } }).populate('category');
-      
+
       for (const cartItem of payload.services) {
         const service = fetchedServices.find(s => s._id.toString() === cartItem.serviceItem);
         if (!service) throw new ApiError(404, `Service item ${cartItem.serviceItem} not found`);
-        
+
         serviceItems.push({
           serviceCategory: service.category?._id || service.category,
           serviceItem: service._id,
@@ -364,11 +364,11 @@ export const CustomerService = {
           issueDescription: cartItem.issueDescription || '',
           estimatedCost: (service.basePrice || 0) * (cartItem.quantity || 1)
         });
-        
+
         totalEstimatedCost += (service.basePrice || 0) * (cartItem.quantity || 1);
         combinedIssueDescription += `${service.name}: ${cartItem.issueDescription || 'No specific issue'}\n`;
       }
-      
+
       // Use first service as primary for backward compatibility
       primaryServiceItem = fetchedServices[0];
       primaryCategory = primaryServiceItem.category?._id || primaryServiceItem.category;
@@ -376,12 +376,12 @@ export const CustomerService = {
       // Single service order (existing flow)
       const serviceItem = await ServiceItem.findById(payload.serviceItem).populate('category');
       if (!serviceItem) throw new ApiError(404, 'Service item not found');
-      
+
       primaryServiceItem = serviceItem;
       primaryCategory = serviceItem.category?._id || serviceItem.category;
       totalEstimatedCost = payload.estimatedCost || serviceItem.basePrice || 0;
       combinedIssueDescription = payload.issueDescription;
-      
+
       serviceItems.push({
         serviceCategory: primaryCategory,
         serviceItem: serviceItem._id,
@@ -392,10 +392,10 @@ export const CustomerService = {
       });
     }
 
-    const availability = await this.checkTimeSlotAvailability({ 
-      serviceItem: primaryServiceItem._id, 
-      start: payload.preferredStart, 
-      end: payload.preferredEnd 
+    const availability = await this.checkTimeSlotAvailability({
+      serviceItem: primaryServiceItem._id,
+      start: payload.preferredStart,
+      end: payload.preferredEnd
     });
     if (!availability.available) {
       throw new ApiError(400, availability.reason || 'Slot unavailable');
@@ -441,11 +441,11 @@ export const CustomerService = {
     });
 
     await addHistoryEntry({
-          orderId: order._id,
-          action: NOTIFICATION_EVENTS.ORDER_CREATED,
-          message: `Order created by customer(${customer.name}) with ${serviceItems.length} service(s)`,
-          metadata: { scheduledAt: payload.scheduledAt, servicesCount: serviceItems.length }
-        });
+      orderId: order._id,
+      action: NOTIFICATION_EVENTS.ORDER_CREATED,
+      message: `Order created by customer(${customer.name}) with ${serviceItems.length} service(s)`,
+      metadata: { scheduledAt: payload.scheduledAt, servicesCount: serviceItems.length }
+    });
 
     await notificationService.notifyAdmin(NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED, {
       orderId: order._id,
@@ -475,15 +475,15 @@ export const CustomerService = {
     const query = Order.findOne({ _id: orderId, customerUser: customerId })
       .populate('serviceItem serviceCategory assignedTechnician', 'name email mobile')
       .populate('customerAddress');
-    
+
     // Only use lean if not needing to save
     if (!options.forUpdate) {
       query.lean();
     }
-    
+
     const order = await query;
     if (!order) throw new ApiError(404, 'Order not found');
-    
+
     // For lean queries, add history and map fields
     if (!options.forUpdate) {
       // Fetch history from OrderHistory model
@@ -504,7 +504,7 @@ export const CustomerService = {
         }));
       }
     }
-    
+
     return order;
   },
 
@@ -695,37 +695,41 @@ export const CustomerService = {
 
   async cancelOrder(customerId, orderId, reason) {
     const order = await this.getOrderById(customerId, orderId, { forUpdate: true });
-    
-    // Only allow cancellation for pending or confirmed orders
-    if (![ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED].includes(order.status)) {
-      throw new ApiError(400, 'Order cannot be cancelled at this stage');
+
+    // Disallow if already finalised
+    if ([ORDER_STATUS.COMPLETED, ORDER_STATUS.CANCELLED].includes(order.status)) {
+      throw new ApiError(400, 'Order is already finalized and cannot be cancelled');
     }
 
-    order.status = ORDER_STATUS.CANCELLED;
-    order.cancelledReason = reason || 'Cancelled by customer';
-    order.cancelledAt = new Date();
+    // Set to cancellation requested and record history
+    order.status = ORDER_STATUS.CANCELLATION_REQUESTED;
     await order.save();
 
     await addHistoryEntry({
       orderId: order._id,
-      action: 'cancelled',
-      message: `Order cancelled by customer${reason ? `: ${reason}` : ''}`,
-      metadata: { reason, cancelledBy: 'customer' },
+      action: NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED,
+      message: `Customer requested cancellation${reason ? `: ${reason}` : ''}`,
+      metadata: { reason, requestedBy: 'customer' },
       performedBy: customerId
     });
 
-    // Notify admin about cancellation
-    await notificationService.notifyAdmins(NOTIFICATION_EVENTS.ORDER_STATUS_CHANGED, {
+    // Notify admins to review cancellation
+    await notificationService.notifyAdmin(NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED, {
       orderId: order._id,
-      status: ORDER_STATUS.CANCELLED,
       reason
     });
 
-    // Notify technician if assigned
+    // Notify customer for acknowledgement
+    await notificationService.notifyCustomer(customerId, NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED, {
+      recipient: customerId,
+      orderId: order._id,
+      reason
+    });
+
+    // Notify technician if currently assigned
     if (order.assignedTechnician) {
-      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.ORDER_STATUS_CHANGED, {
+      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED, {
         orderId: order._id,
-        status: ORDER_STATUS.CANCELLED,
         reason
       });
     }

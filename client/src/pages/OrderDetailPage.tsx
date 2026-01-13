@@ -46,6 +46,14 @@ export const OrderDetailPage = () => {
     },
   })
 
+  const cancelOrderMutation = useMutation({
+    mutationFn: (reason?: string) => orderService.cancelOrder(orderId!, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
+    },
+  })
+
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case 'completed':
@@ -93,6 +101,12 @@ export const OrderDetailPage = () => {
         text: 'Cancelled',
         border: 'border-red-200',
       },
+      'cancellation_requested': {
+        color: 'text-orange-700',
+        bg: 'bg-orange-50',
+        text: 'Cancellation Requested',
+        border: 'border-orange-200',
+      },
     }
     return (
       configs[status.toLowerCase()] || {
@@ -125,6 +139,10 @@ export const OrderDetailPage = () => {
       cancelled: {
         title: 'Order Cancelled',
         description: 'This order has been cancelled. If you have any questions, please contact our support team.',
+      },
+      'cancellation_requested': {
+        title: 'Cancellation Requested',
+        description: 'We have received your cancellation request. Our team will review and update the status shortly.',
       },
     }
     return (
@@ -248,6 +266,20 @@ export const OrderDetailPage = () => {
               >
                 {statusConfig.text.toUpperCase()}
               </span>
+              {['cancelled', 'completed'].includes(order.status.toLowerCase()) || order.status.toLowerCase() === 'cancellation_requested' ? null : (
+                <button
+                  onClick={() => {
+                    const proceed = window.confirm('Do you want to request cancellation for this order?')
+                    if (!proceed) return
+                    const reason = window.prompt('Optional: Provide a reason for cancellation') || undefined
+                    cancelOrderMutation.mutate(reason?.trim() ? reason.trim() : undefined)
+                  }}
+                  disabled={cancelOrderMutation.isPending}
+                  className="inline-flex items-center px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-all shadow-sm disabled:opacity-50"
+                >
+                  {cancelOrderMutation.isPending ? 'Submitting…' : 'Request Cancellation'}
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -384,8 +416,8 @@ export const OrderDetailPage = () => {
                         <div className="w-2 h-2 mt-2 rounded-full bg-primary-600" />
                         <div>
                           <p className="text-sm text-gray-900">{entry.message || entry.action}</p>
-                          {entry.performedAt && (
-                            <p className="text-xs text-gray-500">{format(new Date(entry.performedAt), 'MMM dd, yyyy hh:mm a')}</p>
+                          {entry.createdAt && (
+                            <p className="text-xs text-gray-500">{format(new Date(entry.createdAt), 'MMM dd, yyyy hh:mm a')}</p>
                           )}
                         </div>
                       </div>
