@@ -96,14 +96,23 @@ export const TechnicianService = {
   },
 
   async blockCalendar({ technicianId, orderId, start, end }) {
-    const slotStart = start || end;
-    return TechnicianCalendar.create({
-      technician: technicianId,
-      order: orderId,
-      date: slotStart || new Date(),
-      start: slotStart || new Date(),
-      end: end || start || new Date()
-    });
+    const slotStart = start || end || new Date();
+    const slotEnd = end || start || slotStart;
+    // Idempotent upsert to avoid duplicate key on (technician, order)
+    return TechnicianCalendar.findOneAndUpdate(
+      { technician: technicianId, order: orderId },
+      {
+        $set: {
+          technician: technicianId,
+          order: orderId,
+          date: slotStart,
+          start: slotStart,
+          end: slotEnd,
+          status: 'blocked'
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
   },
 
   async listJobCards(technicianId, filters = {}) {

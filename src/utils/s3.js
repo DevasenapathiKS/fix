@@ -36,6 +36,7 @@ export const uploadToS3 = async (file, folder = 'uploads') => {
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
+      ACL: 'public-read',
       // ACL removed - use bucket policy for public access instead
     };
 
@@ -69,6 +70,7 @@ export const uploadBufferToS3 = async (buffer, filename, mimetype, folder = 'upl
       Key: key,
       Body: buffer,
       ContentType: mimetype,
+      ACL: 'public-read',
       // ACL removed - use bucket policy for public access instead
     });
 

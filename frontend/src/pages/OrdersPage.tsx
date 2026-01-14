@@ -56,8 +56,8 @@ const statusFilterOptions = [
 
 const jobStatusOptions = [
   { value: 'follow_up', label: 'Follow up' },
-  { value: 'inProgrss', label: 'inProgress' },
-  { value: 'completed', label: 'Complete' }
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' }
 ];
 const jobStatusValues = jobStatusOptions.map((option) => option.value);
 
@@ -74,6 +74,7 @@ type ActivityEvent = {
   description?: string;
   timestamp?: string;
   accent?: string;
+  attachments?: FollowUpAttachment[];
 };
 
 type PaymentStatusValue = 'pending' | 'partial' | 'paid';
@@ -471,24 +472,26 @@ export const OrdersPage = () => {
       });
     });
 
-    // if (order?.followUp?.reason) {
-    //   events.push({
-    //     id: 'follow-up-start',
-    //     title: 'Moved to follow up',
-    //     description: order.followUp.reason,
-    //     timestamp: order.followUp.createdAt,
-    //     accent: 'bg-rose-500'
-    //   });
-    //   if (order.followUp.resolvedAt) {
-    //     events.push({
-    //       id: 'follow-up-resolved',
-    //       title: 'Follow up resolved',
-    //       description: 'Case moved out of follow up',
-    //       timestamp: order.followUp.resolvedAt,
-    //       accent: 'bg-emerald-500'
-    //     });
-    //   }
-    // }
+    // Follow-up events (reason + attachments)
+    if (order?.followUp?.reason) {
+      events.push({
+        id: 'follow-up-start',
+        title: 'Follow Up Requested',
+        description: order.followUp.reason,
+        timestamp: order.followUp.createdAt,
+        accent: 'bg-orange-500',
+        attachments: order.followUp.attachments || []
+      });
+      if (order.followUp.resolvedAt) {
+        events.push({
+          id: 'follow-up-resolved',
+          title: 'Follow Up Resolved',
+          description: 'Case moved out of follow up',
+          timestamp: order.followUp.resolvedAt,
+          accent: 'bg-emerald-500'
+        });
+      }
+    }
 
     // (jobCardDetail.payments || []).forEach((payment, idx) => {
     //   events.push({
@@ -1964,6 +1967,19 @@ export const OrdersPage = () => {
                           <span className={`absolute -left-2 top-2 block h-3 w-3 rounded-full ${activity.accent || 'bg-slate-300'}`} />
                           <p className="text-sm font-semibold text-slate-900">{activity.title}</p>
                           {activity.description && <p className="text-xs text-slate-500">{activity.description}</p>}
+                          {activity.attachments && activity.attachments.length > 0 && (
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              {activity.attachments.map((att, idx) => (
+                                <div key={`${att.url}-${idx}`} className="rounded-lg overflow-hidden border border-slate-100 bg-white">
+                                  {att.kind === 'video' ? (
+                                    <video src={att.url} className="w-full h-24 object-cover" controls />
+                                  ) : (
+                                    <img src={att.url} alt={att.name || 'Attachment'} className="w-full h-24 object-cover" />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {activity.timestamp && <p className="text-[11px] text-slate-400">{formatDateTime(activity.timestamp)}</p>}
                         </li>
                       ))}

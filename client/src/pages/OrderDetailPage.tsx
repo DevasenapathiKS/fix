@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
+// import { formatInTimeZone } from "date-fns-tz";
 import {
   ArrowLeftIcon,
   CheckCircleIcon,
@@ -19,6 +20,7 @@ import {
 import { orderService } from '../services/orderService'
 import { format } from 'date-fns'
 import { useState, useMemo } from 'react'
+import { formatDateTime } from '../utils/helpers';
 
 export const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
@@ -170,15 +172,29 @@ export const OrderDetailPage = () => {
 
   // Derived totals for Job Summary with safe fallbacks
   const gstRate = 0.18
+  const extraWorksTotal = useMemo(() => {
+    const extra = Array.isArray(jobCard?.extraWork) ? jobCard!.extraWork : []
+    return extra.reduce((sum: number, w: any) => sum + Number(w?.amount ?? 0), 0)
+  }, [jobCard?.extraWork])
+  const sparePartsList = useMemo(() => {
+    // Currently client jobCard shape provides 'spareParts'
+    return (jobCard?.spareParts ?? []) as any[]
+  }, [jobCard?.spareParts])
+  const sparePartsTotal = useMemo(() => {
+    return sparePartsList.reduce((sum: number, p: any) => {
+      const qty = Number(p?.quantity ?? 0)
+      const unitPrice = Number(
+        p?.unitPrice ?? (typeof p?.part === 'object' ? p?.part?.unitPrice ?? 0 : 0)
+      )
+      return sum + qty * unitPrice
+    }, 0)
+  }, [sparePartsList])
   const subtotal = useMemo(() => {
     const jcFinal = Number(jobCard?.finalAmount ?? 0)
-    const derived = Number(jobCard?.estimateAmount ?? 0) + Number(jobCard?.additionalCharges ?? 0)
-    const orderEst = Number(order?.estimatedCost ?? 0)
-    // Prefer job card final, else derived from job card fields, else order estimate
     if (jcFinal > 0) return jcFinal
-    if (derived > 0) return derived
-    return orderEst
-  }, [jobCard?.finalAmount, jobCard?.estimateAmount, jobCard?.additionalCharges, order?.estimatedCost])
+    const base = Number(jobCard?.estimateAmount ?? 0) + Number(jobCard?.additionalCharges ?? 0)
+    return base + extraWorksTotal + sparePartsTotal
+  }, [jobCard?.finalAmount, jobCard?.estimateAmount, jobCard?.additionalCharges, extraWorksTotal, sparePartsTotal])
   const gstAmount = useMemo(() => subtotal * gstRate, [subtotal])
   const grandTotal = useMemo(() => subtotal + gstAmount, [subtotal, gstAmount])
 
@@ -366,21 +382,22 @@ export const OrderDetailPage = () => {
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">Order Placed</p>
                   <p className="text-base font-semibold text-gray-900">
-                    {format(new Date(order.createdAt), 'MMM dd, yyyy')}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {format(new Date(order.createdAt), 'hh:mm a')}
+                    {/* {format(new Date(order.createdAt), 'MMM dd, yyyy')} */}
+                    {formatDateTime(order.createdAt)}
                   </p>
                 </div>
 
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">Scheduled Service</p>
-                  <p className="text-base font-semibold text-gray-900">
-                    {format(new Date(order.scheduledAt), 'MMM dd, yyyy')}
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-semibold text-gray-900">
+                    {formatDateTime(order.timeWindowStart)}
                   </p>
+                  <span className="mx-1 text-black/50">→</span>
                   <p className="text-sm text-gray-600">
-                    {format(new Date(order.scheduledAt), 'hh:mm a')}
+                    {formatDateTime(order.timeWindowEnd)}
                   </p>
+                  </div>
                 </div>
               </div>
 
@@ -417,7 +434,7 @@ export const OrderDetailPage = () => {
                         <div>
                           <p className="text-sm text-gray-900">{entry.message || entry.action}</p>
                           {entry.createdAt && (
-                            <p className="text-xs text-gray-500">{format(new Date(entry.createdAt), 'MMM dd, yyyy hh:mm a')}</p>
+                            <p className="text-xs text-gray-500">{formatDateTime(entry.createdAt)}</p>
                           )}
                         </div>
                       </div>
@@ -533,16 +550,8 @@ export const OrderDetailPage = () => {
                 className="bg-white rounded-2xl shadow-md p-6 sm:p-8"
               >
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Job Summary</h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-600">Estimate</span><span className="font-semibold">₹{jobCard.estimateAmount.toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">Additional</span><span className="font-semibold">₹{jobCard.additionalCharges.toFixed(2)}</span></div>
-                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Subtotal</span><span className="text-gray-900 font-bold">₹{subtotal.toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">GST (18%)</span><span className="font-semibold">₹{gstAmount.toFixed(2)}</span></div>
-                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Grand Total</span><span className="text-primary-600 font-bold">₹{grandTotal.toFixed(2)}</span></div>
-                  <div className="text-xs text-gray-500">Payment: {jobCard.paymentStatus}</div>
-                </div>
                 {(jobCard.extraWork?.length > 0 || jobCard.spareParts?.length > 0) && (
-                  <div className="mt-4">
+                  <div className="mb-4">
                     {jobCard.extraWork?.length > 0 && (
                       <div className="mb-3">
                         <p className="text-sm font-semibold text-gray-900 mb-1">Extra Work</p>
@@ -565,6 +574,17 @@ export const OrderDetailPage = () => {
                     )}
                   </div>
                 )}
+                <div className="space-y-2 text-sm">
+                  {order.services.map((service: any) => (
+                    <div className="flex justify-between"><span className="text-gray-600">{service.serviceName}</span><span className="text-gray-600">₹{jobCard.estimateAmount.toFixed(2)}</span></div>
+                  ))}
+                  {/* <div className="flex justify-between"><span className="text-gray-600">Estimate</span><span className="font-semibold">₹{jobCard.estimateAmount.toFixed(2)}</span></div> */}
+                  {/* <div className="flex justify-between"><span className="text-gray-600">Additional</span><span className="font-semibold">₹{jobCard.additionalCharges.toFixed(2)}</span></div> */}
+                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Subtotal</span><span className="text-gray-900 font-bold">₹{subtotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">GST (18%)</span><span className="font-semibold">₹{gstAmount.toFixed(2)}</span></div>
+                  <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Grand Total</span><span className="text-primary-600 font-bold">₹{grandTotal.toFixed(2)}</span></div>
+                  <div className="text-xs text-gray-500">Payment: {jobCard.paymentStatus}</div>
+                </div>
               </motion.div>
             )}
 
