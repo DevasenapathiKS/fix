@@ -9,6 +9,7 @@ import { SignupModal } from './SignupModal'
 import { CartButton } from '../cart/CartButton'
 import toast from 'react-hot-toast'
 import { catalogService, type ServiceItem } from '../../services/catalogService'
+import logo from '../../../../assets/logo.ico/apple-icon.png'
 
 export const Topbar = () => {
   const navigate = useNavigate()
@@ -105,8 +106,8 @@ export const Topbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center">
-            <h1 className="text-2xl font-bold text-primary-600">Fixzep</h1>
+          <Link to="/" className="flex items-center" aria-label="Go to Fixzep home">
+            <img src={logo} alt="Fixzep" className="h-auto w-auto" />
           </Link>
 
           {/* Search */}

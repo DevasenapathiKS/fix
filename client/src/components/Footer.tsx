@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { MapPinIcon, PhoneIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
+import logo from '../../../assets/logo.ico/apple-icon-152x152.png'
 
 export const Footer = () => {
   return (
@@ -9,7 +10,9 @@ export const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="space-y-4">
-            <h3 className="text-2xl font-bold text-white">Fixzep</h3>
+            <Link to="/" className="flex items-center" aria-label="Go to Fixzep home">
+              <img src={logo} alt="Fixzep" className="h-auto w-auto bg-white" />
+            </Link>
             <p className="text-sm text-gray-400">
               Your trusted partner for all home repair and maintenance services in OMR, Chennai.
             </p>
