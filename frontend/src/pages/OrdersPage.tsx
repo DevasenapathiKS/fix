@@ -647,6 +647,12 @@ export const OrdersPage = () => {
       }
     }
 
+    // Prevent marking job as completed until payment status is Paid
+    if (jobStatusChoice === 'completed' && jobCard?.paymentStatus !== 'paid') {
+      toast.error('Set payment status to Paid before marking the job as completed');
+      return;
+    }
+
     statusMutation.mutate({
       orderId: jobCardModal.order._id,
       status: jobStatusChoice,
@@ -1105,6 +1111,8 @@ export const OrdersPage = () => {
     !jobStatusChoice ||
     statusMutation.isPending ||
     (isFollowUpSelected && (!followUpReason.trim() || followUpAttachments.length === 0)) ||
+    // Block completing the job until payment is marked as paid
+    (jobStatusChoice === 'completed' && jobCard?.paymentStatus !== 'paid') ||
     isOrderCompleted;
 
   const paymentStatusActionDisabled =
