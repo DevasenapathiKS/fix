@@ -25,9 +25,9 @@ const env = {
   smtpPort: Number(process.env.SMTP_PORT) || 587,
   smtpUser: process.env.SMTP_USER,
   smtpPass: process.env.SMTP_PASS,
-  smtpFrom: process.env.SMTP_FROM || 'no-reply@fixzep.com',
+  smtpFrom: process.env.SMTP_FROM || 'noreply@fixzep.com',
   // Public customer app URL used in email links
-  customerAppUrl: process.env.CUSTOMER_APP_URL || 'https://eopsys.xyz/',
+  customerAppUrl: process.env.CUSTOMER_APP_URL || 'https://fixzep.com/',
 };
 
 export default env;

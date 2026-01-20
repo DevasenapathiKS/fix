@@ -20,7 +20,7 @@ function ensureTransporter() {
   transporter = nodemailer.createTransport({
     host: env.smtpHost,
     port: env.smtpPort,
-    secure: env.smtpPort === 465,
+    secure: false,
     pool: true,
     maxConnections: 5,
     maxMessages: 100,
@@ -97,7 +97,7 @@ export async function sendPasswordResetEmail({ to, name, resetUrl }) {
 
   const message = buildPasswordResetEmail({ to, name, resetUrl });
   await tx.sendMail({
-    from: `Fixzep <${env.smtpFrom}>`,
+    from: env.smtpFrom,
     to: message.to,
     subject: message.subject,
     text: message.text,
@@ -118,7 +118,7 @@ export async function sendOrderConfirmationEmail({ order, customerName, customer
   try {
     const message = buildOrderConfirmationEmail({ order, customerName, customerEmail });
     await tx.sendMail({
-      from: `Fixzep <${env.smtpFrom}>`,
+      from: env.smtpFrom,
       to: message.to,
       subject: message.subject,
       text: message.text,
@@ -145,7 +145,7 @@ export async function sendTechnicianAssignedEmail({ order, technician, customerN
   try {
     const message = buildTechnicianAssignedEmail({ order, technician, customerName, customerEmail });
     await tx.sendMail({
-      from: `Fixzep <${env.smtpFrom}>`,
+      from: env.smtpFrom,
       to: message.to,
       subject: message.subject,
       text: message.text,
@@ -172,7 +172,7 @@ export async function sendOrderRescheduledEmail({ order, newStart, newEnd, custo
   try {
     const message = buildOrderRescheduledEmail({ order, newStart, newEnd, customerName, customerEmail, reason });
     await tx.sendMail({
-      from: `Fixzep <${env.smtpFrom}>`,
+      from: env.smtpFrom,
       to: message.to,
       subject: message.subject,
       text: message.text,
@@ -199,7 +199,7 @@ export async function sendInvoiceEmail({ order, jobCard, payment, customerName, 
   try {
     const message = buildInvoiceEmail({ order, jobCard, payment, customerName, customerEmail });
     await tx.sendMail({
-      from: `Fixzep <${env.smtpFrom}>`,
+      from: env.smtpFrom,
       to: message.to,
       subject: message.subject,
       text: message.text,
