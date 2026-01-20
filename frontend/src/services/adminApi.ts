@@ -120,7 +120,11 @@ export const CatalogAPI = {
 export const SparePartsAPI = {
   list: () => extract<SparePart[]>(apiClient.get<ApiSuccess<SparePart[]>>('/admin/spare-parts')),
   upsert: (payload: SparePart) =>
-    extract<SparePart>(apiClient.post<ApiSuccess<SparePart>>('/admin/spare-parts', payload))
+    extract<SparePart>(apiClient.post<ApiSuccess<SparePart>>('/admin/spare-parts', payload)),
+  update: (sparePartId: string, payload: Partial<SparePart>) =>
+    extract<SparePart>(apiClient.put<ApiSuccess<SparePart>>(`/admin/spare-parts/${sparePartId}`, payload)),
+  delete: (sparePartId: string) =>
+    extract<{ message: string }>(apiClient.delete<ApiSuccess<{ message: string }>>(`/admin/spare-parts/${sparePartId}`))
 };
 
 export const TechnicianSkillsAPI = {

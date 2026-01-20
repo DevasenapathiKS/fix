@@ -27,5 +27,6 @@ export const authorize = (...allowedRoles) => (req, res, next) => {
 };
 
 export const allowAdminOnly = authorize(USER_ROLES.ADMIN);
+export const allowSuperAdminOnly = authorize(USER_ROLES.SUPER_ADMIN);
 export const allowTechnicianOnly = authorize(USER_ROLES.TECHNICIAN);
 export const allowCustomerOnly = authorize(USER_ROLES.CUSTOMER);

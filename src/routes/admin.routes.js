@@ -29,6 +29,8 @@ import {
   updateServiceItem,
   deleteServiceItem,
   upsertSparePart,
+  updateSparePart,
+  deleteSparePart,
   updateOrderStatus,
   uploadOrderMedia,
   deleteOrderMedia,
@@ -258,6 +260,22 @@ router.post(
   '/spare-parts',
   validate([body('name').notEmpty(), body('sku').notEmpty(), body('unitPrice').isFloat({ min: 0 })]),
   upsertSparePart
+);
+router.put(
+  '/spare-parts/:sparePartId',
+  validate([
+    param('sparePartId').isMongoId(),
+    body('name').optional().notEmpty(),
+    body('sku').optional().notEmpty(),
+    body('unitPrice').optional().isFloat({ min: 0 }),
+    body('isActive').optional().isBoolean()
+  ]),
+  updateSparePart
+);
+router.delete(
+  '/spare-parts/:sparePartId',
+  validate([param('sparePartId').isMongoId()]),
+  deleteSparePart
 );
 
 router.get('/technician-skills', listTechnicianSkills);

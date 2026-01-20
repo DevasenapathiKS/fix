@@ -4,6 +4,8 @@ import { ORDER_STATUS } from '../constants/index.js';
 import ApiError from '../utils/api-error.js';
 import { notificationService, NOTIFICATION_EVENTS } from './notification.service.js';
 import { orderHistoryService } from './order-history.service.js';
+import { sendOrderRescheduledEmail } from './email.service.js';
+import User from '../models/user.model.js';
 
 export const addHistoryEntry = async ({ orderId, action, message, metadata, performedBy }) =>
   orderHistoryService.recordEntry({ orderId, action, message, metadata, performedBy });
@@ -119,6 +121,22 @@ export const OrderService = {
       newStart: start,
       newEnd: end
     });
+
+    // Send email notification to customer
+    const customer = await User.findById(order.customerUser).lean();
+    if (customer?.email) {
+      sendOrderRescheduledEmail({
+        order: await Order.findById(order._id).populate('serviceItem', 'name').lean(),
+        newStart: start,
+        newEnd: end,
+        customerName: customer.name || order.customer?.name,
+        customerEmail: customer.email || order.customer?.email,
+        reason: 'Order rescheduled by admin'
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[Email] Failed to send order rescheduled email', err);
+      });
+    }
 
     return shapeOrderWithHistory(order);
   }

@@ -8,6 +8,7 @@ import {
   createAddress,
   deleteAddress,
   forgotPassword,
+  resetPassword,
   getAdditionalItems,
   getHistory,
   getInvoice,
@@ -41,6 +42,7 @@ import {
   addressUpdateValidator,
   approvalDecisionValidator,
   forgotPasswordValidator,
+  resetPasswordValidator,
   loginValidator,
   orderCreateValidator,
   orderHistoryQueryValidator,
@@ -60,6 +62,7 @@ const router = Router();
 router.post('/auth/register', registerCustomer);
 router.post('/auth/login', loginValidator, loginCustomer);
 router.post('/auth/forgot-password', forgotPasswordValidator, forgotPassword);
+router.post('/auth/reset-password', resetPasswordValidator, resetPassword);
 
 // Public routes - no authentication required
 router.get('/services', listServices);

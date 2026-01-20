@@ -1,7 +1,7 @@
 # Login Debugging Guide
 
 ## Current Setup
-- Client running on: http://localhost:5174
+- Client running on: https://fixzep.com
 - Backend API: https://admin.eopsys.xyz/api
 - Login endpoint: POST /customer/auth/login
 

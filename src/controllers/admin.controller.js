@@ -78,6 +78,16 @@ export const upsertSparePart = asyncHandler(async (req, res) => {
   return successResponse(res, { data: part, message: 'Spare part saved' });
 });
 
+export const updateSparePart = asyncHandler(async (req, res) => {
+  const part = await AdminService.updateSparePart(req.params.sparePartId, req.body);
+  return successResponse(res, { data: part, message: 'Spare part updated successfully' });
+});
+
+export const deleteSparePart = asyncHandler(async (req, res) => {
+  await AdminService.deleteSparePart(req.params.sparePartId);
+  return successResponse(res, { data: {}, message: 'Spare part deleted successfully' });
+});
+
 export const listTechnicianSkills = asyncHandler(async (_req, res) => {
   const skills = await AdminService.listTechnicianSkills();
   return successResponse(res, { data: skills });

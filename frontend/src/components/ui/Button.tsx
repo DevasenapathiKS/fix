@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'ghost' | 'secondary';
+  variant?: 'primary' | 'ghost' | 'secondary' | 'danger';
   icon?: ReactNode;
   loading?: boolean;
 }
@@ -19,7 +19,8 @@ export const Button = ({
   const styles = {
     primary: 'bg-slate-900 text-white hover:bg-slate-800',
     secondary: 'bg-white text-slate-900 border border-slate-200 hover:border-slate-900',
-    ghost: 'bg-transparent text-slate-600 hover:text-slate-900'
+    ghost: 'bg-transparent text-slate-600 hover:text-slate-900',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700'
   };
 
   return (

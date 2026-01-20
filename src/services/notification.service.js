@@ -17,9 +17,15 @@ class NotificationService {
   }
 
   async notifyTechnician(technicianId, event, payload) {
+    // Ensure recipient is set so in-app notifications can be stored and queried
+    const enrichedPayload = {
+      ...(payload || {}),
+      recipient: payload?.recipient || technicianId
+    };
+
     // Emit to specific technician via WebSocket
-    socketService.emitToUser(technicianId, event, payload);
-    return this.dispatch({ topic: `${env.technicianTopic}.${technicianId}`, event, payload });
+    socketService.emitToUser(technicianId, event, enrichedPayload);
+    return this.dispatch({ topic: `${env.technicianTopic}.${technicianId}`, event, payload: enrichedPayload });
   }
 
   async notifyCustomer(customerId, event, payload) {

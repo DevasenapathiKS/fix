@@ -9,7 +9,10 @@ import SparePart from '../models/spare-part.model.js';
 import ServiceCategory from '../models/service-category.model.js';
 import ServiceItem from '../models/service-item.model.js';
 import ApiError from '../utils/api-error.js';
+import { ORDER_STATUS, JOB_STATUS, USER_ROLES } from '../constants/index.js';
+import User from '../models/user.model.js';
 import { orderHistoryService } from './order-history.service.js';
+import { AdminService } from './admin.service.js';
 
 const shapeRef = (value) => {
   if (!value) return null;
@@ -60,6 +63,47 @@ const shapeJobCardDetail = (jobCard) => {
 };
 
 export const TechnicianService = {
+  async getProfile(technicianId) {
+    const user = await User.findById(technicianId);
+    if (!user || user.role !== USER_ROLES.TECHNICIAN) {
+      throw new ApiError(404, 'Technician not found');
+    }
+
+    const profileDoc = await TechnicianProfile.findOne({ user: technicianId })
+      .populate('serviceCategories', 'name description')
+      .populate('serviceItems', 'name description')
+      .lean();
+
+    const response = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.mobile,
+      role: user.role
+    };
+
+    if (profileDoc) {
+      response.profile = {
+        experienceYears: profileDoc.experienceYears,
+        averageRating: profileDoc.averageRating,
+        workingHours: profileDoc.workingHours,
+        baseLocation: profileDoc.baseLocation,
+        serviceCategories: (profileDoc.serviceCategories || []).map((category) => ({
+          id: category._id,
+          name: category.name,
+          description: category.description
+        })),
+        serviceItems: (profileDoc.serviceItems || []).map((item) => ({
+          id: item._id,
+          name: item.name,
+          description: item.description
+        }))
+      };
+    }
+
+    return response;
+  },
+
   async updateAvailability(technicianId, entries) {
     const bulkOps = entries.map((entry) => ({
       updateOne: {
@@ -145,6 +189,58 @@ export const TechnicianService = {
     }));
   },
 
+  async listActiveJobsToday(technicianId) {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Find today's orders assigned to this technician with active order statuses
+    const orders = await Order.find({
+      assignedTechnician: technicianId,
+      timeWindowStart: { $gte: startOfDay, $lte: endOfDay },
+      status: { $in: [ORDER_STATUS.ASSIGNED, ORDER_STATUS.IN_PROGRESS] }
+    })
+      .select(
+        'orderCode status customer customerAddress serviceCategory serviceItem issueDescription preferredSlot scheduledAt timeWindowStart timeWindowEnd estimatedCost media'
+      )
+      .populate('serviceItem', 'name description')
+      .populate('serviceCategory', 'name description')
+      .lean();
+
+    if (!orders.length) return [];
+
+    const orderIdList = orders.map((o) => o._id);
+    const orderMap = orders.reduce((acc, order) => {
+      acc[String(order._id)] = order;
+      return acc;
+    }, {});
+
+    // From those orders, return job cards that are still active for the technician
+    const jobCards = await JobCard.find({
+      technician: technicianId,
+      order: { $in: orderIdList },
+      status: { $in: [JOB_STATUS.OPEN, JOB_STATUS.CHECKED_IN] }
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return jobCards.map((card) => {
+      const order = orderMap[String(card.order)];
+      return {
+        id: card._id,
+        status: card.status,
+        estimateAmount: card.estimateAmount ?? order?.estimatedCost ?? 0,
+        finalAmount: card.finalAmount,
+        order: shapeOrderSummary(order),
+        lastCheckInAt: card.checkIns?.length ? card.checkIns[card.checkIns.length - 1].timestamp : null,
+        updatedAt: card.updatedAt,
+        createdAt: card.createdAt
+      };
+    });
+  },
+
   async getJobCardDetailForTechnician(jobCardId, technicianId) {
     const jobCard = await JobCard.findOne({ _id: jobCardId, technician: technicianId })
       .populate('sparePartsUsed.part', 'name sku unitPrice')
@@ -187,6 +283,28 @@ export const TechnicianService = {
         updatedAt: payment.updatedAt
       }))
     };
+  },
+
+  async addOrderMediaForTechnician(jobCardId, technicianId, mediaItems) {
+    const jobCard = await JobCard.findOne({ _id: jobCardId, technician: technicianId });
+    if (!jobCard) {
+      throw new ApiError(404, 'Job card not found');
+    }
+
+    await AdminService.addOrderMedia(jobCard.order, mediaItems, technicianId);
+
+    return this.getJobCardDetailForTechnician(jobCardId, technicianId);
+  },
+
+  async removeOrderMediaForTechnician(jobCardId, technicianId, mediaId) {
+    const jobCard = await JobCard.findOne({ _id: jobCardId, technician: technicianId });
+    if (!jobCard) {
+      throw new ApiError(404, 'Job card not found');
+    }
+
+    await AdminService.removeOrderMedia(jobCard.order, mediaId, technicianId);
+
+    return this.getJobCardDetailForTechnician(jobCardId, technicianId);
   },
 
   async listSpareParts() {

@@ -4,9 +4,13 @@ import {
   addExtraWork,
   addSpareParts,
   checkIn,
+  checkOut,
   completeJob,
+  deleteJobMedia,
   getAvailability,
   getJobCardDetail,
+  getProfile,
+  listActiveJobsToday,
   listJobCards,
   listSpareParts,
   listServiceCatalog,
@@ -15,7 +19,8 @@ import {
   removeExtraWork,
   removeSparePart,
   updateAvailability,
-  updateEstimate
+  updateEstimate,
+  uploadJobMedia
 } from '../controllers/technician.controller.js';
 import { authenticate, allowTechnicianOnly } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
@@ -23,6 +28,8 @@ import { validate } from '../middlewares/validate.middleware.js';
 const router = Router();
 
 router.use(authenticate, allowTechnicianOnly);
+
+router.get('/profile', getProfile);
 
 router.post(
   '/availability',
@@ -38,6 +45,7 @@ router.post(
 router.get('/availability', getAvailability);
 
 router.get('/jobcards', listJobCards);
+router.get('/jobcards/active-today', listActiveJobsToday);
 router.get('/jobcards/:jobCardId', validate([param('jobCardId').isMongoId()]), getJobCardDetail);
 
 router.post(
@@ -48,6 +56,15 @@ router.post(
     body('lng').isFloat()
   ]),
   checkIn
+);
+
+router.post(
+  '/jobcards/:jobCardId/checkout',
+  validate([
+    param('jobCardId').isMongoId(),
+    body('otp').isString().isLength({ min: 6, max: 6 })
+  ]),
+  checkOut
 );
 
 router.post(
@@ -102,6 +119,27 @@ router.post(
     body('followUpNote').optional().isString()
   ]),
   completeJob
+);
+
+router.post(
+  '/jobcards/:jobCardId/media',
+  validate([
+    param('jobCardId').isMongoId(),
+    body('media').isArray({ min: 1 }),
+    body('media.*.url').isString().notEmpty(),
+    body('media.*.kind').optional().isIn(['image', 'video', 'document']),
+    body('media.*.name').optional().isString()
+  ]),
+  uploadJobMedia
+);
+
+router.delete(
+  '/jobcards/:jobCardId/media/:mediaId',
+  validate([
+    param('jobCardId').isMongoId(),
+    param('mediaId').isMongoId()
+  ]),
+  deleteJobMedia
 );
 
 router.get('/notifications', listNotifications);

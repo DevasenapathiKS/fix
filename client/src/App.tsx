@@ -6,12 +6,14 @@ import { LocationBanner } from './components/LocationBanner'
 import { HomePage } from './pages/HomePage'
 import { BannerPage } from './pages/BannerPage'
 import { ServiceDetailPage } from './pages/ServiceDetailPage'
+import { ServiceItemDetailPage } from './pages/ServiceItemDetailPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { OrdersPage } from './pages/OrdersPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { AboutPage } from './pages/AboutPage'
 import { ContactPage } from './pages/ContactPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import './App.css'
 
 // Create a client
@@ -37,10 +39,12 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/banners" element={<BannerPage />} />
             <Route path="/services/:categoryId" element={<ServiceDetailPage />} />
+            <Route path="/service/:serviceId" element={<ServiceItemDetailPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:orderId" element={<OrderDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, select: false },
     role: { type: String, enum: Object.values(USER_ROLES), required: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    passwordResetToken: { type: String },
+    passwordResetExpires: { type: Date },
     lastLoginAt: { type: Date }
   },
   {

@@ -20,6 +20,14 @@ const env = {
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   awsS3Bucket: process.env.AWS_S3_BUCKET,
+  // SMTP / email configuration
+  smtpHost: process.env.SMTP_HOST,
+  smtpPort: Number(process.env.SMTP_PORT) || 587,
+  smtpUser: process.env.SMTP_USER,
+  smtpPass: process.env.SMTP_PASS,
+  smtpFrom: process.env.SMTP_FROM || 'no-reply@fixzep.com',
+  // Public customer app URL used in email links
+  customerAppUrl: process.env.CUSTOMER_APP_URL || 'https://eopsys.xyz/',
 };
 
 export default env;

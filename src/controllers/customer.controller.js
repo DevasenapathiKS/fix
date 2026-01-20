@@ -15,7 +15,12 @@ export const loginCustomer = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const result = await CustomerService.forgotPassword(req.body);
-  return successResponse(res, { data: result, message: 'OTP sent to your contact' });
+  return successResponse(res, { data: result, message: 'If an account exists, a reset link has been sent to the email on file.' });
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const result = await CustomerService.resetPassword(req.body);
+  return successResponse(res, { data: result, message: 'Password updated successfully' });
 });
 
 export const getProfile = asyncHandler(async (req, res) => {

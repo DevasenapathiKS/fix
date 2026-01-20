@@ -343,6 +343,18 @@ export const AdminService = {
     return part;
   },
 
+  async updateSparePart(sparePartId, payload) {
+    const part = await SparePart.findByIdAndUpdate(sparePartId, payload, { new: true });
+    if (!part) throw new ApiError(404, 'Spare part not found');
+    return part;
+  },
+
+  async deleteSparePart(sparePartId) {
+    const part = await SparePart.findByIdAndDelete(sparePartId);
+    if (!part) throw new ApiError(404, 'Spare part not found');
+    return part;
+  },
+
   async viewTechnicianAvailability(technicianId) {
     return TechnicianAvailability.find({ technician: technicianId }).sort({ dayOfWeek: 1 });
   },

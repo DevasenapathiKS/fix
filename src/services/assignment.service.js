@@ -1,13 +1,27 @@
 import Order from '../models/order.model.js';
 import JobCard from '../models/jobcard.model.js';
 import TechnicianProfile from '../models/technician-profile.model.js';
+import User from '../models/user.model.js';
 import ApiError from '../utils/api-error.js';
 import { TechnicianService } from './technician.service.js';
 import { notificationService, NOTIFICATION_EVENTS } from './notification.service.js';
+import { sendTechnicianAssignedEmail } from './email.service.js';
 import { ORDER_STATUS, JOB_STATUS } from '../constants/index.js';
 import { isTechnicianAvailable } from '../utils/availability.js';
 import TechnicianCalendar from '../models/calendar.model.js';
 import { addHistoryEntry } from './order.service.js';
+
+const generateSixDigitOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const generateUniqueJobCardOtp = async () => {
+  // Try a few times to avoid rare collisions
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const otp = generateSixDigitOtp();
+    const existing = await JobCard.findOne({ otp }).select('_id').lean();
+    if (!existing) return otp;
+  }
+  throw new ApiError(500, 'Unable to generate unique OTP for job card');
+};
 
 export const AssignmentService = {
   async assignTechnician({ orderId, technicianId, adminId }) {
@@ -58,7 +72,12 @@ export const AssignmentService = {
       { order: order._id },
       { order: order._id, technician: technicianId, status: JOB_STATUS.OPEN, estimateAmount: order.estimatedCost },
       { upsert: true, new: true }
-    );
+    ).then(async (jobCard) => {
+      if (jobCard && !jobCard.otp) {
+        jobCard.otp = await generateUniqueJobCardOtp();
+        await jobCard.save();
+      }
+    });
 
     await notificationService.notifyTechnician(technicianId, NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED, {
       orderId: order._id,
@@ -69,6 +88,25 @@ export const AssignmentService = {
       orderId: order._id,
       technicianId
     });
+
+    // Send email notification to customer
+    const [customer, technician] = await Promise.all([
+      User.findById(order.customerUser).lean(),
+      User.findById(technicianId).lean()
+    ]);
+
+    if (customer?.email) {
+      const populatedOrder = await Order.findById(order._id).populate('serviceItem', 'name').lean();
+      sendTechnicianAssignedEmail({
+        order: populatedOrder,
+        technician,
+        customerName: customer.name || order.customer?.name,
+        customerEmail: customer.email || order.customer?.email
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[Email] Failed to send technician assigned email', err);
+      });
+    }
 
     return order;
   }

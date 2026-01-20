@@ -214,6 +214,7 @@ export const CustomersPage = () => {
       toast.error('Address line 1, city, and state are required');
       return;
     }
+    
     updateAddressMutation.mutate({
       line1: addressLine1.trim(),
       line2: addressLine2.trim() || undefined,

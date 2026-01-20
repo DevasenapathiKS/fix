@@ -47,6 +47,7 @@ const jobCardSchema = new mongoose.Schema(
     estimateAmount: { type: Number, default: 0 },
     additionalCharges: { type: Number, default: 0 },
     finalAmount: { type: Number, default: 0 },
+    otp: { type: String, minlength: 6, maxlength: 6 },
     paymentStatus: {
       type: String,
       enum: ['pending', 'paid', 'partial'],

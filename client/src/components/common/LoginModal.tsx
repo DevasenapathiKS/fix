@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { useForm } from 'react-hook-form'
+import { useNavigate } from 'react-router-dom'
 import { authService } from '../../services/authService'
 import type { LoginCredentials } from '../../services/authService'
 import { useAuthStore } from '../../store/authStore'
@@ -16,6 +17,7 @@ interface LoginModalProps {
 export const LoginModal = ({ isOpen, onClose, onSwitchToSignup }: LoginModalProps) => {
   const { setAuth } = useAuthStore()
   const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
 
   const {
     register,
@@ -145,9 +147,16 @@ export const LoginModal = ({ isOpen, onClose, onSwitchToSignup }: LoginModalProp
                         </div>
 
                         <div className="text-sm">
-                          <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose()
+                              navigate('/reset-password')
+                            }}
+                            className="font-medium text-primary-600 hover:text-primary-500"
+                          >
                             Forgot password?
-                          </a>
+                          </button>
                         </div>
                       </div>
 

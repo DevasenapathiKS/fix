@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Menu, Transition } from '@headlessui/react'
 import { ChevronDownIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
@@ -44,7 +44,7 @@ export const Topbar = () => {
       setShowResults(false)
       setSearchQuery('')
       setSearchResults([])
-      navigate(`/services/${catId}?serviceId=${svc._id}`)
+      navigate(`/service/${svc._id}`)
     } else {
       toast.error('Unable to open service. Please try from Services page.')
       navigate('/services')
@@ -174,7 +174,7 @@ export const Topbar = () => {
                 </div>
 
                 <Transition
-                  as={Fragment}
+                  as="div"
                   enter="transition ease-out duration-100"
                   enterFrom="transform opacity-0 scale-95"
                   enterTo="transform opacity-100 scale-100"

@@ -210,6 +210,7 @@ export const ServiceDetailPage = () => {
                 transition={{ duration: 0.4, delay: index * 0.05 }}
                 id={`svc-${service._id}`}
                 className={`group h-full relative ${highlightedId === service._id ? 'ring-2 ring-primary-600 rounded-lg' : ''}`}
+                onClick={() => navigate(`/service/${service._id}`)}
               >
                 {/* In Cart Badge */}
                 {isInCart(service._id) && (
@@ -236,11 +237,9 @@ export const ServiceDetailPage = () => {
                           if (fallback) fallback.style.display = 'flex'
                         }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <h3 className="text-lg font-semibold text-white">
-                          {service.name}
-                        </h3>
+                        <h3 className="text-lg font-semibold text-white">{service.name}</h3>
                       </div>
                     </div>
                   ) : (
@@ -249,9 +248,7 @@ export const ServiceDetailPage = () => {
                         <div className="w-16 h-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
                           <PhotoIcon className="w-8 h-8 text-white" />
                         </div>
-                        <h3 className="text-lg font-semibold text-white">
-                          {service.name}
-                        </h3>
+                        <h3 className="text-lg font-semibold text-white">{service.name}</h3>
                       </div>
                     </div>
                   )}
@@ -279,7 +276,10 @@ export const ServiceDetailPage = () => {
                     {/* Add to Cart or Quantity Controls */}
                     {getQuantity(service._id) === 0 ? (
                       <button
-                        onClick={() => handleAddToCart(service)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleAddToCart(service)
+                        }}
                         className="w-full py-2.5 px-4 rounded-lg font-medium transition-all flex items-center justify-center bg-primary-600 text-white hover:bg-primary-700"
                       >
                         <PlusIcon className="w-5 h-5 mr-2" />
@@ -289,7 +289,10 @@ export const ServiceDetailPage = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
                           <button
-                            onClick={() => updateQuantity(service._id, getQuantity(service._id) - 1)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateQuantity(service._id, getQuantity(service._id) - 1)
+                            }}
                             className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
                             aria-label="Decrease quantity"
                           >
@@ -299,7 +302,10 @@ export const ServiceDetailPage = () => {
                             {getQuantity(service._id)}
                           </span>
                           <button
-                            onClick={() => updateQuantity(service._id, getQuantity(service._id) + 1)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateQuantity(service._id, getQuantity(service._id) + 1)
+                            }}
                             className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
                             aria-label="Increase quantity"
                           >

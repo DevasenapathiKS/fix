@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Visit localhost:5173 and log in with an admin user from the backend API.
+Visit https://fixzep.com and log in with an admin user from the backend API.
 
 ### Desktop App Development
 ```bash
@@ -105,7 +105,7 @@ frontend/
 ```
 
 ## Environment Variables
-- `VITE_API_URL` — Backend base URL (defaults to localhost:4000/api if unset)
+- `VITE_API_URL` — Backend base URL (defaults to admin.eopsys.xyz/api if unset)
 
 Example `.env`:
 ```env

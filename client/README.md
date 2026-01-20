@@ -53,7 +53,7 @@ VITE_API_URL=https://admin.eopsys.xyz/api
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+The app will be available at `https://fixzep.com`
 
 ### Build
 

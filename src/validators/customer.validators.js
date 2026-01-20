@@ -17,6 +17,11 @@ export const forgotPasswordValidator = validate([
   body('identifier').notEmpty()
 ]);
 
+export const resetPasswordValidator = validate([
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+]);
+
 export const profileUpdateValidator = validate([
   body('name').optional().isString(),
   body('phone').optional().isString(),

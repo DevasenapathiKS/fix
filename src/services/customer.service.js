@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import env from '../config/env.js';
 import ApiError from '../utils/api-error.js';
 import User from '../models/user.model.js';
@@ -19,6 +20,7 @@ import { USER_ROLES, ORDER_STATUS, PAYMENT_STATUS } from '../constants/index.js'
 import { notificationService, NOTIFICATION_EVENTS } from './notification.service.js';
 import { PaymentService } from './payment.service.js';
 import { orderHistoryService } from './order-history.service.js';
+import { sendPasswordResetEmail, sendOrderConfirmationEmail, sendInvoiceEmail } from './email.service.js';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -123,16 +125,58 @@ export const CustomerService = {
   },
 
   async forgotPassword({ identifier }) {
-    const user = await User.findOne(
-      identifier.includes('@') ? { email: identifier.toLowerCase(), role: USER_ROLES.CUSTOMER } : { mobile: identifier, role: USER_ROLES.CUSTOMER }
-    );
-    if (!user) throw new ApiError(404, 'Customer not found');
-    const otp = Math.floor(100000 + Math.random() * 900000);
-    await notificationService.notifyCustomer(user._id, NOTIFICATION_EVENTS.CUSTOMER_ORDER_PLACED, {
-      recipient: user._id,
-      otp
+    const query = identifier.includes('@')
+      ? { email: identifier.toLowerCase(), role: USER_ROLES.CUSTOMER }
+      : { mobile: identifier, role: USER_ROLES.CUSTOMER };
+
+    const user = await User.findOne(query);
+
+    // For security, do not reveal whether the account exists.
+    if (!user || !user.email || user.status !== 'active' || user == null) {
+      return { sent: false };
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = dayjs().add(60, 'minute').toDate();
+    await user.save({ validateBeforeSave: false });
+
+    const resetUrl = `${env.customerAppUrl.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+
+    // Send email asynchronously so the API response is fast
+    sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[Email] Failed to send password reset email', err);
     });
-    return { otp, expiresIn: 300 };
+
+    return { sent: true };
+  },
+
+  async resetPassword({ token, password }) {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+      role: USER_ROLES.CUSTOMER
+    }).select('+password');
+
+    if (!user) {
+      throw new ApiError(400, 'Invalid or expired reset link');
+    }
+
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    return { updated: true };
   },
 
   async getProfile(customerId) {
@@ -459,6 +503,23 @@ export const CustomerService = {
       orderId: order._id
     });
 
+    // Send order confirmation email to customer
+    if (customer.email) {
+      const populatedOrder = await Order.findById(order._id)
+        .populate('serviceItem', 'name')
+        .populate('services.serviceItem', 'name')
+        .lean();
+      
+      sendOrderConfirmationEmail({
+        order: populatedOrder,
+        customerName: customer.name,
+        customerEmail: customer.email
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[Email] Failed to send order confirmation email', err);
+      });
+    }
+
     return order;
   },
 
@@ -584,6 +645,32 @@ export const CustomerService = {
       paymentId: payment._id,
       orderId: payment.order
     });
+
+    // Send invoice email after successful payment
+    const [order, jobCard] = await Promise.all([
+      Order.findById(payment.order).populate('serviceItem', 'name').lean(),
+      JobCard.findOne({ order: payment.order })
+        .populate('extraWork.serviceCategory extraWork.serviceItem', 'name')
+        .populate('sparePartsUsed.part', 'name partNumber')
+        .lean()
+    ]);
+
+    if (order?.customerUser) {
+      const customer = await User.findById(order.customerUser).lean();
+      if (customer?.email) {
+        sendInvoiceEmail({
+          order,
+          jobCard,
+          payment,
+          customerName: customer.name || order.customer?.name,
+          customerEmail: customer.email || order.customer?.email
+        }).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[Email] Failed to send invoice email', err);
+        });
+      }
+    }
+
     return payment;
   },
 
@@ -604,6 +691,7 @@ export const CustomerService = {
       finalAmount: jobCard.finalAmount || 0,
       paymentStatus: jobCard.paymentStatus || 'pending',
       status: jobCard.status,
+      otp: jobCard.otp || null,
       extraWork: (jobCard.extraWork || []).map((w) => ({ description: w.description, amount: w.amount })),
       spareParts: (jobCard.sparePartsUsed || []).map((p) => ({ quantity: p.quantity, unitPrice: p.unitPrice }))
     };

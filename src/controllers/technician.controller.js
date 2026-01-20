@@ -8,6 +8,11 @@ export const updateAvailability = asyncHandler(async (req, res) => {
   return successResponse(res, { data, message: 'Availability updated' });
 });
 
+export const getProfile = asyncHandler(async (req, res) => {
+  const profile = await TechnicianService.getProfile(req.user.id);
+  return successResponse(res, { data: profile });
+});
+
 export const getAvailability = asyncHandler(async (req, res) => {
   const data = await TechnicianService.getAvailability(req.user.id);
   return successResponse(res, { data });
@@ -15,6 +20,11 @@ export const getAvailability = asyncHandler(async (req, res) => {
 
 export const listJobCards = asyncHandler(async (req, res) => {
   const jobs = await TechnicianService.listJobCards(req.user.id, req.query);
+  return successResponse(res, { data: jobs });
+});
+
+export const listActiveJobsToday = asyncHandler(async (req, res) => {
+  const jobs = await TechnicianService.listActiveJobsToday(req.user.id);
   return successResponse(res, { data: jobs });
 });
 
@@ -48,6 +58,13 @@ export const checkIn = asyncHandler(async (req, res) => {
   const { lat, lng, note } = req.body;
   const jobCard = await JobcardService.checkIn({ jobCardId, technicianId: req.user.id, lat, lng, note });
   return successResponse(res, { data: jobCard, message: 'Check-in recorded' });
+});
+
+export const checkOut = asyncHandler(async (req, res) => {
+  const { jobCardId } = req.params;
+  const { otp } = req.body;
+  const jobCard = await JobcardService.checkout({ jobCardId, technicianId: req.user.id, otp });
+  return successResponse(res, { data: jobCard, message: 'Checkout recorded' });
 });
 
 export const addExtraWork = asyncHandler(async (req, res) => {
@@ -104,4 +121,22 @@ export const completeJob = asyncHandler(async (req, res) => {
     followUpNote: req.body.followUpNote
   });
   return successResponse(res, { data: jobCard, message: 'Job marked as completed' });
+});
+
+export const uploadJobMedia = asyncHandler(async (req, res) => {
+  const payload = await TechnicianService.addOrderMediaForTechnician(
+    req.params.jobCardId,
+    req.user.id,
+    req.body.media || []
+  );
+  return successResponse(res, { data: payload, message: 'Media uploaded successfully' });
+});
+
+export const deleteJobMedia = asyncHandler(async (req, res) => {
+  const payload = await TechnicianService.removeOrderMediaForTechnician(
+    req.params.jobCardId,
+    req.user.id,
+    req.params.mediaId
+  );
+  return successResponse(res, { data: payload, message: 'Media deleted successfully' });
 });

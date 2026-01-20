@@ -81,6 +81,41 @@ export const JobcardService = {
     return jobCard;
   },
 
+  async checkout({ jobCardId, technicianId, otp }) {
+    const jobCard = await JobCard.findById(jobCardId);
+    if (!jobCard) throw new ApiError(404, 'Job card missing');
+    if (String(jobCard.technician) !== String(technicianId)) {
+      throw new ApiError(403, 'Not allowed to update this job');
+    }
+
+    if (!jobCard.otp) {
+      throw new ApiError(400, 'OTP not configured for this job card');
+    }
+
+    if (String(jobCard.otp) !== String(otp)) {
+      throw new ApiError(400, 'Invalid OTP provided');
+    }
+
+    // Record a history entry that OTP-based checkout was verified
+    await orderHistoryService.recordEntry({
+      orderId: jobCard.order,
+      action: 'technician_checkout_otp_verified',
+      message: 'Technician checked out with OTP verification',
+      metadata: {
+        jobCardId,
+        otpVerified: true
+      },
+      performedBy: technicianId
+    });
+
+    await notificationService.notifyAdmin(NOTIFICATION_EVENTS.JOB_UPDATED, {
+      orderId: jobCard.order,
+      jobCardId
+    });
+
+    return jobCard;
+  },
+
   async addExtraWork({ jobCardId, technicianId, workItems }) {
     const jobCard = await JobCard.findById(jobCardId);
     if (!jobCard) throw new ApiError(404, 'Job card missing');
