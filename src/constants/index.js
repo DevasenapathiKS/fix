@@ -38,7 +38,12 @@ export const PAYMENT_STATUS = {
 
 export const PAYMENT_METHODS = {
   CASH: 'cash',
-  UPI: 'upi'
+  UPI: 'upi',
+  RAZORPAY: 'razorpay',
+  RAZORPAY_CARD: 'razorpay_card',
+  RAZORPAY_UPI: 'razorpay_upi',
+  RAZORPAY_NETBANKING: 'razorpay_netbanking',
+  RAZORPAY_WALLET: 'razorpay_wallet'
 };
 
 export const NOTIFICATION_EVENTS = {

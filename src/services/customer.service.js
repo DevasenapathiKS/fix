@@ -622,23 +622,42 @@ export const CustomerService = {
   },
 
   async initializePayment(customerId, payload) {
-    const order = await this.getOrderById(customerId, payload.orderId);
-    console.log('Order for payment initialization:', payload);
-    const payment = await PaymentService.initializeCustomerPayment({
-      orderId: order._id,
-      customerId,
-      method: payload.method,
-      amount: payload.amount
-    });
-    console.log('Initialized payment:', payment);
-    return payment;
+    // If orderData provided (payment-first flow), initialize without order
+    if (payload.orderData && Array.isArray(payload.orderData)) {
+      const payment = await PaymentService.initializePaymentWithOrderData({
+        orderData: payload.orderData,
+        customerId,
+        method: payload.method,
+        amount: payload.amount
+      });
+      return payment;
+    }
+
+    // If orderId provided, use existing order (backward compatibility)
+    if (payload.orderId) {
+      const order = await this.getOrderById(customerId, payload.orderId);
+      console.log('Order for payment initialization:', payload);
+      const payment = await PaymentService.initializeCustomerPayment({
+        orderId: order._id,
+        customerId,
+        method: payload.method,
+        amount: payload.amount
+      });
+      console.log('Initialized payment:', payment);
+      return payment;
+    }
+
+    throw new ApiError(400, 'Either orderId or orderData must be provided');
   },
 
   async confirmPayment(customerId, payload) {
     const payment = await PaymentService.confirmCustomerPayment({
       paymentId: payload.paymentId,
       customerId,
-      transactionRef: payload.transactionRef
+      orderId: payload.orderId,
+      transactionRef: payload.transactionRef,
+      razorpayPaymentId: payload.razorpayPaymentId,
+      razorpaySignature: payload.razorpaySignature
     });
     await notificationService.notifyCustomer(customerId, NOTIFICATION_EVENTS.PAYMENT_RECEIVED, {
       recipient: customerId,
@@ -646,28 +665,30 @@ export const CustomerService = {
       orderId: payment.order
     });
 
-    // Send invoice email after successful payment
-    const [order, jobCard] = await Promise.all([
-      Order.findById(payment.order).populate('serviceItem', 'name').lean(),
-      JobCard.findOne({ order: payment.order })
-        .populate('extraWork.serviceCategory extraWork.serviceItem', 'name')
-        .populate('sparePartsUsed.part', 'name partNumber')
-        .lean()
-    ]);
+    // Send invoice email after successful payment (only if order exists)
+    if (payment.order) {
+      const [order, jobCard] = await Promise.all([
+        Order.findById(payment.order).populate('serviceItem', 'name').lean(),
+        JobCard.findOne({ order: payment.order })
+          .populate('extraWork.serviceCategory extraWork.serviceItem', 'name')
+          .populate('sparePartsUsed.part', 'name partNumber')
+          .lean()
+      ]);
 
-    if (order?.customerUser) {
-      const customer = await User.findById(order.customerUser).lean();
-      if (customer?.email) {
-        sendInvoiceEmail({
-          order,
-          jobCard,
-          payment,
-          customerName: customer.name || order.customer?.name,
-          customerEmail: customer.email || order.customer?.email
-        }).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('[Email] Failed to send invoice email', err);
-        });
+      if (order?.customerUser) {
+        const customer = await User.findById(order.customerUser).lean();
+        if (customer?.email) {
+          sendInvoiceEmail({
+            order,
+            jobCard,
+            payment,
+            customerName: customer.name || order.customer?.name,
+            customerEmail: customer.email || order.customer?.email
+          }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('[Email] Failed to send invoice email', err);
+          });
+        }
       }
     }
 

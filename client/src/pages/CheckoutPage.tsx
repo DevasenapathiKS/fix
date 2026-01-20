@@ -5,10 +5,11 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { formatInTimeZone } from "date-fns-tz";
-import { PlusIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, CheckCircleIcon, CreditCardIcon, BanknotesIcon } from '@heroicons/react/24/outline'
 import { useCartStore } from '../store/cartStore'
-import { orderService } from '../services/orderService'
+import { orderService, type Order } from '../services/orderService'
 import type { CreateOrderData } from '../services/orderService'
+import { paymentService, type PaymentMethod } from '../services/paymentService'
 import { useAuthStore } from '../store/authStore'
 import { addressService, timeSlotService, type Address, type TimeSlot } from '../services/addressService'
 import { validateAddress } from '../services/serviceAreaService'
@@ -21,6 +22,12 @@ interface CheckoutFormData {
   selectedSlotStart: string
   selectedSlotEnd: string
   notes?: string
+}
+
+declare global {
+  interface Window {
+    Razorpay: any
+  }
 }
 
 export const CheckoutPage = () => {
@@ -94,8 +101,12 @@ export const CheckoutPage = () => {
     runValidation()
   }, [addresses, setValue])
 
-  // We'll place one order per cart item
+  // Order placement and payment flow - payment first, then create orders
+  const [orderPayloads, setOrderPayloads] = useState<CreateOrderData[]>([])
   const [placingOrders, setPlacingOrders] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [processingPayment, setProcessingPayment] = useState(false)
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (!user) {
@@ -120,6 +131,7 @@ export const CheckoutPage = () => {
       return
     }
 
+    // Prepare order data (but don't create orders yet)
     const payloads: CreateOrderData[] = items.map((item) => {
       const subtotal = item.price * item.quantity
       const gst = subtotal * gstRate
@@ -138,23 +150,152 @@ export const CheckoutPage = () => {
       }
     })
 
-    setPlacingOrders(true)
+    // Store order data and show payment modal
+    setOrderPayloads(payloads)
+    setShowPaymentModal(true)
+  }
+
+  const handlePaymentMethodSelect = (method: PaymentMethod) => {
+    setSelectedPaymentMethod(method)
+  }
+
+  const processPayment = async () => {
+    if (!selectedPaymentMethod || orderPayloads.length === 0 || !user) return
+
+    setProcessingPayment(true)
     try {
-      const results = await Promise.allSettled(payloads.map((p) => orderService.createOrder(p)))
-      const successes = results.filter((r) => r.status === 'fulfilled').length
-      const failures = results.length - successes
-      if (successes > 0) {
-        toast.success(`Placed ${successes} order${successes > 1 ? 's' : ''} successfully`)
-        clearCart()
-        navigate('/orders')
+      // Calculate total amount for all orders
+      const totalAmount = orderPayloads.reduce((sum, payload) => sum + (payload.estimatedCost || 0), 0)
+
+      if (selectedPaymentMethod === 'cash') {
+        // For cash, initialize payment first (payment-first flow)
+        // Then create orders after payment is "confirmed" (cash is COD, so immediate)
+        try {
+          const paymentInit = await paymentService.initializePaymentWithOrderData({
+            orderData: orderPayloads,
+            customerId: user.id,
+            method: selectedPaymentMethod,
+            amount: totalAmount
+          })
+
+          // For cash, payment is immediately "confirmed" (COD), so create orders now
+          setPlacingOrders(true)
+          
+          const results = await Promise.allSettled(
+            orderPayloads.map((p) => orderService.createOrder(p))
+          )
+          const fulfilled = results
+            .filter((r) => r.status === 'fulfilled')
+            .map((r) => (r as PromiseFulfilledResult<Order>).value)
+
+          if (fulfilled.length === 0) {
+            throw new Error('Failed to create orders')
+          }
+
+          // Confirm cash payment with first order
+          const firstOrder = fulfilled[0]
+          await paymentService.confirmPayment({
+            paymentId: paymentInit._id,
+            orderId: firstOrder._id,
+            transactionRef: `cash_${Date.now()}`
+          })
+
+          toast.success(`Orders placed successfully! ${fulfilled.length} order${fulfilled.length > 1 ? 's' : ''} created. Payment will be collected on service delivery.`)
+          clearCart()
+          setShowPaymentModal(false)
+          navigate('/orders')
+        } catch (error: any) {
+          toast.error(error?.response?.data?.message || 'Failed to process payment')
+        } finally {
+          setPlacingOrders(false)
+          setProcessingPayment(false)
+        }
+      } else {
+        // For Razorpay, initialize payment first (without order ID)
+        // We'll create orders after payment is captured
+        const paymentInit = await paymentService.initializePaymentWithOrderData({
+          orderData: orderPayloads,
+          customerId: user.id,
+          method: selectedPaymentMethod,
+          amount: totalAmount
+        })
+
+        if (!paymentInit.razorpayOrder) {
+          throw new Error('Failed to initialize Razorpay payment')
+        }
+
+        // Open Razorpay checkout
+        const options = {
+          key: paymentInit.razorpayOrder.key,
+          amount: paymentInit.razorpayOrder.amount * 100, // Convert to paise
+          currency: paymentInit.razorpayOrder.currency,
+          name: 'Fixzep',
+          description: `Payment for ${orderPayloads.length} order(s)`,
+          order_id: paymentInit.razorpayOrder.id,
+          handler: async (response: any) => {
+            try {
+              // After payment success, create orders and confirm payment
+              setPlacingOrders(true)
+              
+              // Create orders after payment
+              const results = await Promise.allSettled(
+                orderPayloads.map((p) => orderService.createOrder(p))
+              )
+              const fulfilled = results
+                .filter((r) => r.status === 'fulfilled')
+                .map((r) => (r as PromiseFulfilledResult<Order>).value)
+
+              if (fulfilled.length === 0) {
+                throw new Error('Failed to create orders after payment')
+              }
+
+              // Confirm payment with first order
+              const firstOrder = fulfilled[0]
+              await paymentService.confirmPayment({
+                paymentId: paymentInit._id,
+                orderId: firstOrder._id, // Update payment with order ID
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature
+              })
+
+              toast.success(`Payment successful! ${fulfilled.length} order${fulfilled.length > 1 ? 's' : ''} placed.`)
+              clearCart()
+              setShowPaymentModal(false)
+              navigate('/orders')
+            } catch (error: any) {
+              toast.error(error?.response?.data?.message || 'Failed to process payment')
+              setProcessingPayment(false)
+            } finally {
+              setPlacingOrders(false)
+            }
+          },
+          prefill: {
+            name: user?.name || '',
+            email: user?.email || '',
+            contact: user?.phone || ''
+          },
+          theme: {
+            color: '#0f172a'
+          },
+          modal: {
+            ondismiss: () => {
+              toast.error('Payment cancelled')
+              setProcessingPayment(false)
+            }
+          }
+        }
+
+        const razorpay = new window.Razorpay(options)
+        razorpay.on('payment.failed', (response: any) => {
+          toast.error(`Payment failed: ${response.error.description || 'Unknown error'}`)
+          setProcessingPayment(false)
+        })
+        razorpay.open()
       }
-      if (failures > 0) {
-        toast.error(`Failed to place ${failures} order${failures > 1 ? 's' : ''}`)
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to place orders')
-    } finally {
-      setPlacingOrders(false)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Payment processing failed')
+      setProcessingPayment(false)
     }
   }
 
@@ -586,6 +727,139 @@ export const CheckoutPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Payment Method Selection Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Select Payment Method</h2>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false)
+                    clearCart()
+                    navigate('/orders')
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">Order Summary</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-900 font-semibold">
+                    {orderPayloads.length} order{orderPayloads.length > 1 ? 's' : ''}
+                  </span>
+                  <span className="text-2xl font-bold text-primary-600">
+                    ₹{totalWithGST.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Cash Payment Option */}
+                <button
+                  onClick={() => handlePaymentMethodSelect('cash')}
+                  className={`p-6 border-2 rounded-lg text-left transition-all ${
+                    selectedPaymentMethod === 'cash'
+                      ? 'border-primary-600 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-lg ${
+                      selectedPaymentMethod === 'cash' ? 'bg-primary-600' : 'bg-gray-100'
+                    }`}>
+                      <BanknotesIcon className={`w-8 h-8 ${
+                        selectedPaymentMethod === 'cash' ? 'text-white' : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Cash on Delivery</h3>
+                      <p className="text-sm text-gray-600">Pay when service is completed</p>
+                      {selectedPaymentMethod === 'cash' && (
+                        <CheckCircleIcon className="w-5 h-5 text-primary-600 mt-2" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Razorpay Payment Options */}
+                <button
+                  onClick={() => handlePaymentMethodSelect('razorpay')}
+                  className={`p-6 border-2 rounded-lg text-left transition-all ${
+                    selectedPaymentMethod === 'razorpay'
+                      ? 'border-primary-600 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-lg ${
+                      selectedPaymentMethod === 'razorpay' ? 'bg-primary-600' : 'bg-gray-100'
+                    }`}>
+                      <CreditCardIcon className={`w-8 h-8 ${
+                        selectedPaymentMethod === 'razorpay' ? 'text-white' : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Online Payment</h3>
+                      <p className="text-sm text-gray-600">Card, UPI, Netbanking & Wallets</p>
+                      {selectedPaymentMethod === 'razorpay' && (
+                        <CheckCircleIcon className="w-5 h-5 text-primary-600 mt-2" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {selectedPaymentMethod === 'razorpay' && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    💳 You'll be redirected to a secure Razorpay payment page. All major payment methods are accepted.
+                  </p>
+                </div>
+              )}
+
+              {selectedPaymentMethod === 'cash' && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    💵 You will pay cash when the technician completes the service. Payment confirmation will be done by the technician.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false)
+                    clearCart()
+                    navigate('/orders')
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Pay Later
+                </button>
+                <button
+                  onClick={processPayment}
+                  disabled={!selectedPaymentMethod || processingPayment}
+                  className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {processingPayment ? 'Processing...' : 'Proceed to Payment'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <AddressModal isOpen={showAddressModal} onClose={() => setShowAddressModal(false)} />
     </div>

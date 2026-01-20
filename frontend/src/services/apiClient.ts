@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders } from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://admin.eopsys.xyz/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://admin.fixzep.com/api',
   timeout: 15_000
 });
 

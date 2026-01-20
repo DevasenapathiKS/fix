@@ -90,14 +90,19 @@ export const approvalDecisionValidator = validate([
 ]);
 
 export const paymentInitializeValidator = validate([
-  body('orderId').isMongoId(),
-  body('method').isIn(['cash', 'upi']),
+  body('orderId').optional().isMongoId(),
+  body('orderData').optional().isArray(),
+  body('method').isIn(['cash', 'upi', 'razorpay', 'razorpay_card', 'razorpay_upi', 'razorpay_netbanking', 'razorpay_wallet']),
   body('amount').isFloat({ min: 0 })
 ]);
 
 export const paymentConfirmValidator = validate([
   body('paymentId').isMongoId(),
-  body('transactionRef').notEmpty()
+  body('orderId').optional().isMongoId(),
+  body('transactionRef').optional().isString(),
+  body('razorpayPaymentId').optional().isString(),
+  body('razorpayOrderId').optional().isString(),
+  body('razorpaySignature').optional().isString()
 ]);
 
 export const paymentStatusValidator = validate([

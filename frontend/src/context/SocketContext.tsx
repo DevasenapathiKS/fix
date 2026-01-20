@@ -45,7 +45,7 @@ interface NotificationItem {
 
 const SocketContext = createContext<SocketContextType | null>(null);
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://admin.eopsys.xyz';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://admin.fixzep.com';
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);

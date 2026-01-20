@@ -129,6 +129,17 @@ router.post(
 );
 
 router.post('/payments', paymentInitializeValidator, initializePayment);
+router.post('/payments/init-with-orders', 
+  validate([
+    body('orderData').isArray().withMessage('Order data is required'),
+    body('orderData.*.customerAddressId').isMongoId(),
+    body('orderData.*.preferredStart').isISO8601(),
+    body('orderData.*.preferredEnd').isISO8601(),
+    body('method').isIn(['cash', 'razorpay', 'razorpay_card', 'razorpay_upi', 'razorpay_netbanking', 'razorpay_wallet']),
+    body('amount').isFloat({ min: 0 })
+  ]),
+  initializePayment
+);
 router.post('/payments/confirm', paymentConfirmValidator, confirmPayment);
 router.get('/payments/:paymentId', paymentStatusValidator, getPaymentStatus);
 

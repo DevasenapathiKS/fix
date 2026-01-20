@@ -3,7 +3,7 @@ import { PAYMENT_METHODS, PAYMENT_STATUS } from '../constants/index.js';
 
 const paymentSchema = new mongoose.Schema(
   {
-    order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
+    order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: false }, // Made optional for payment-first flow
     jobCard: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCard' },
     customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     method: { type: String, enum: Object.values(PAYMENT_METHODS), required: true },
@@ -16,6 +16,6 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-paymentSchema.index({ order: 1, status: 1 });
+paymentSchema.index({ order: 1, status: 1 }, { sparse: true }); // Sparse index to handle payments without orders
 
 export default mongoose.model('Payment', paymentSchema);
