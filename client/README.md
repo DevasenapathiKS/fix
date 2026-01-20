@@ -44,7 +44,7 @@ npm install
 Create a `.env` file in the root directory:
 
 ```env
-VITE_API_URL=https://admin.fixzep.com/api
+VITE_API_URL=https://admin.eopsys.xyz/api
 ```
 
 ### Development

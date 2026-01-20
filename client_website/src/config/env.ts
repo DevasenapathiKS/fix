@@ -1,4 +1,4 @@
-const fallbackApi = 'https://admin.fixzep.com/api';
+const fallbackApi = 'https://admin.eopsys.xyz/api';
 
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return fallbackApi;

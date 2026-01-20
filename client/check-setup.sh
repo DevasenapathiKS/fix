@@ -16,12 +16,12 @@ fi
 
 echo ""
 echo "🌐 Testing Backend Connection..."
-curl -I https://admin.fixzep.com/api/customer/auth/login 2>&1 | grep -E "HTTP|Access-Control"
+curl -I https://admin.eopsys.xyz/api/customer/auth/login 2>&1 | grep -E "HTTP|Access-Control"
 
 echo ""
 echo "📦 Client Configuration:"
 echo "   - Port: 5173"
-echo "   - API URL: $(grep VITE_API_URL .env || echo 'https://admin.fixzep.com/api')"
+echo "   - API URL: $(grep VITE_API_URL .env || echo 'https://admin.eopsys.xyz/api')"
 
 echo ""
 echo "🚀 You can now:"

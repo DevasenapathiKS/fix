@@ -109,7 +109,7 @@ frontend/
 
 Example `.env`:
 ```env
-VITE_API_URL=https://admin.fixzep.com/api
+VITE_API_URL=https://admin.eopsys.xyz/api
 ```
 
 ## Production Build
