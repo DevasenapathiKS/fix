@@ -17,10 +17,19 @@ import {
   CheckIcon,
   WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline'
+
+declare global {
+  interface Window {
+    Razorpay: any
+  }
+}
 import { orderService } from '../services/orderService'
+import { paymentService, type PaymentMethod } from '../services/paymentService'
 import { format } from 'date-fns'
 import { useState, useMemo } from 'react'
-import { formatDateTime } from '../utils/helpers';
+import { formatDateTime } from '../utils/helpers'
+import { useAuthStore } from '../store/authStore'
+import toast from 'react-hot-toast'
 
 export const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
@@ -39,6 +48,23 @@ export const OrderDetailPage = () => {
     queryFn: () => orderService.getJobCard(orderId!),
     enabled: !!orderId,
   })
+
+  const { data: paymentBalance } = useQuery({
+    queryKey: ['orderPaymentBalance', orderId],
+    queryFn: () => paymentService.getPaymentBalance(orderId!),
+    enabled: !!orderId && !!jobCard,
+  })
+
+  const { data: orderPayments = [] } = useQuery({
+    queryKey: ['orderPayments', orderId],
+    queryFn: () => paymentService.getOrderPayments(orderId!),
+    enabled: !!orderId,
+  })
+
+  const { user } = useAuthStore()
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [processingPayment, setProcessingPayment] = useState(false)
 
   const sendMessageMutation = useMutation({
     mutationFn: (message: string) => orderService.postMessage(orderId!, message),
@@ -583,7 +609,50 @@ export const OrderDetailPage = () => {
                   <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Subtotal</span><span className="text-gray-900 font-bold">₹{subtotal.toFixed(2)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-600">GST (18%)</span><span className="font-semibold">₹{gstAmount.toFixed(2)}</span></div>
                   <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Grand Total</span><span className="text-primary-600 font-bold">₹{grandTotal.toFixed(2)}</span></div>
-                  <div className="text-xs text-gray-500">Payment: {jobCard.paymentStatus}</div>
+                  
+                  {/* Payment Balance Information */}
+                  {paymentBalance && (
+                    <>
+                      <div className="border-t pt-2 mt-2 space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Total Paid</span>
+                          <span className="text-green-600 font-semibold">₹{paymentBalance.totalPaid.toFixed(2)}</span>
+                        </div>
+                        {paymentBalance.remainingBalance > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Remaining Balance</span>
+                            <span className="text-red-600 font-semibold">₹{paymentBalance.remainingBalance.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500 mt-1">
+                          Payment Status: <span className={`font-semibold ${
+                            paymentBalance.isFullyPaid ? 'text-green-600' : 
+                            paymentBalance.isPartiallyPaid ? 'text-yellow-600' : 
+                            'text-red-600'
+                          }`}>
+                            {paymentBalance.isFullyPaid ? 'Fully Paid' : 
+                             paymentBalance.isPartiallyPaid ? 'Partially Paid' : 
+                             'Pending Payment'}
+                          </span>
+                        </div>
+                        {orderPayments.length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {orderPayments.length} payment{orderPayments.length > 1 ? 's' : ''} received
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Pay Remaining Amount Button */}
+                      {paymentBalance.remainingBalance > 0 && (
+                        <button
+                          onClick={() => setShowPaymentModal(true)}
+                          className="w-full mt-3 bg-primary-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
+                        >
+                          Pay Remaining ₹{paymentBalance.remainingBalance.toFixed(2)}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -612,6 +681,181 @@ export const OrderDetailPage = () => {
             View All Orders
           </Link>
         </motion.div>
+
+        {/* Payment Modal for Remaining Balance */}
+        {showPaymentModal && paymentBalance && paymentBalance.remainingBalance > 0 && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Pay Remaining Amount</h3>
+              <p className="text-gray-600 mb-4">
+                Remaining balance: <span className="font-bold text-primary-600">₹{paymentBalance.remainingBalance.toFixed(2)}</span>
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <button
+                  onClick={() => setSelectedPaymentMethod('cash')}
+                  className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
+                    selectedPaymentMethod === 'cash'
+                      ? 'border-primary-600 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Cash on Delivery</h4>
+                      <p className="text-sm text-gray-600">Pay when service is completed</p>
+                    </div>
+                    {selectedPaymentMethod === 'cash' && (
+                      <CheckCircleIcon className="w-6 h-6 text-primary-600" />
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setSelectedPaymentMethod('razorpay')}
+                  className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
+                    selectedPaymentMethod === 'razorpay'
+                      ? 'border-primary-600 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Online Payment</h4>
+                      <p className="text-sm text-gray-600">Card, UPI, Netbanking & Wallets</p>
+                    </div>
+                    {selectedPaymentMethod === 'razorpay' && (
+                      <CheckCircleIcon className="w-6 h-6 text-primary-600" />
+                    )}
+                  </div>
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false)
+                    setSelectedPaymentMethod(null)
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedPaymentMethod || !user || !orderId) return
+                    
+                    setProcessingPayment(true)
+                    try {
+                      if (selectedPaymentMethod === 'cash') {
+                        const paymentInit = await paymentService.initializeRemainingPayment(orderId, 'cash')
+                        await paymentService.confirmPayment({
+                          paymentId: paymentInit._id,
+                          orderId,
+                          transactionRef: `cash_${Date.now()}`
+                        })
+                        toast.success('Cash payment selected. Technician will collect payment on-site.')
+                        setShowPaymentModal(false)
+                        queryClient.invalidateQueries({ queryKey: ['orderPaymentBalance', orderId] })
+                        queryClient.invalidateQueries({ queryKey: ['orderPayments', orderId] })
+                        queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
+                      } else if (selectedPaymentMethod === 'razorpay') {
+                        const paymentInit = await paymentService.initializeRemainingPayment(orderId, 'razorpay')
+                        
+                        if (!paymentInit.razorpayOrder) {
+                          throw new Error('Failed to initialize Razorpay payment')
+                        }
+
+                        // Load Razorpay script
+                        const loadRazorpayScript = () => {
+                          return new Promise((resolve) => {
+                            if (window.Razorpay) {
+                              resolve(true)
+                              return
+                            }
+                            const script = document.createElement('script')
+                            script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+                            script.onload = () => resolve(true)
+                            script.onerror = () => resolve(false)
+                            document.body.appendChild(script)
+                          })
+                        }
+
+                        const scriptLoaded = await loadRazorpayScript()
+                        if (!scriptLoaded) {
+                          toast.error('Razorpay SDK failed to load. Please try again.')
+                          setProcessingPayment(false)
+                          return
+                        }
+
+                        const options = {
+                          key: paymentInit.razorpayOrder.key,
+                          amount: paymentInit.razorpayOrder.amount * 100,
+                          currency: paymentInit.razorpayOrder.currency,
+                          name: 'Fixzep',
+                          description: `Payment for remaining balance - Order #${orderId}`,
+                          order_id: paymentInit.razorpayOrder.id,
+                          handler: async (response: any) => {
+                            try {
+                              await paymentService.confirmPayment({
+                                paymentId: paymentInit._id,
+                                orderId,
+                                razorpayPaymentId: response.razorpay_payment_id,
+                                razorpayOrderId: response.razorpay_order_id,
+                                razorpaySignature: response.razorpay_signature
+                              })
+                              toast.success('Payment successful!')
+                              setShowPaymentModal(false)
+                              queryClient.invalidateQueries({ queryKey: ['orderPaymentBalance', orderId] })
+                              queryClient.invalidateQueries({ queryKey: ['orderPayments', orderId] })
+                              queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
+                            } catch (error: any) {
+                              toast.error(error?.response?.data?.message || 'Payment confirmation failed')
+                            } finally {
+                              setProcessingPayment(false)
+                            }
+                          },
+                          prefill: {
+                            name: user?.name || '',
+                            email: user?.email || '',
+                            contact: user?.phone || ''
+                          },
+                          theme: {
+                            color: '#4F46E5'
+                          },
+                          modal: {
+                            ondismiss: () => {
+                              toast.error('Payment cancelled')
+                              setProcessingPayment(false)
+                            }
+                          }
+                        }
+
+                        const rzp = new window.Razorpay(options)
+                        rzp.on('payment.failed', (response: any) => {
+                          toast.error(response.error.description || 'Payment failed')
+                          setProcessingPayment(false)
+                        })
+                        rzp.open()
+                      }
+                    } catch (error: any) {
+                      toast.error(error?.response?.data?.message || 'Failed to process payment')
+                      setProcessingPayment(false)
+                    }
+                  }}
+                  disabled={!selectedPaymentMethod || processingPayment}
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {processingPayment ? 'Processing...' : 'Proceed to Payment'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   )

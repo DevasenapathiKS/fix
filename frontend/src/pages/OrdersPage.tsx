@@ -366,8 +366,6 @@ export const OrdersPage = () => {
   const serviceItemInfo = jobCardDetail?.order?.serviceItem;
   const serviceBasePrice = typeof serviceItemInfo === 'string' ? 0 : serviceItemInfo?.basePrice ?? 0;
   const servicePrice = jobCard?.estimateAmount ?? jobCardDetail?.order?.estimatedCost ?? serviceBasePrice;
-  const extraWorks = jobCard?.extraWork ?? [];
-  const extraWorksSubtotal = extraWorks.reduce((sum, work) => sum + (work?.amount ?? 0), 0);
   useEffect(() => {
     console.log('Job Card Detail:', jobCardDetail);
     console.log('Job Card:', jobCard);
@@ -1150,20 +1148,21 @@ export const OrdersPage = () => {
                 <th className="px-4 py-3">Schedule</th>
                 <th className="px-4 py-3">Technician</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Payment</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                     Loading orders…
                   </td>
                 </tr>
               )}
               {!isLoading && orders.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                     No orders found for this filter.
                   </td>
                 </tr>
@@ -1198,6 +1197,21 @@ export const OrdersPage = () => {
                   </td>
                   <td className="px-4 py-4">
                     <Badge variant={order.status}>{order.status.replace(/_/g, ' ')}</Badge>
+                  </td>
+                  <td className="px-4 py-4">
+                    {order.paymentStatus ? (
+                      <Badge 
+                        variant={
+                          order.paymentStatus === 'paid' ? 'emerald' : 
+                          order.paymentStatus === 'partial' ? 'amber' : 
+                          'slate'
+                        }
+                      >
+                        {humanize(order.paymentStatus)}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-right">
                     {order.status === 'completed' ? (
@@ -2094,6 +2108,34 @@ export const OrdersPage = () => {
                             </Badge>
                             <span>Tracks what finance should collect.</span>
                           </div>
+                          
+                          {/* Payment Balance Information */}
+                          {jobCardDetail.paymentBalance && (
+                            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-semibold">Payment Balance</p>
+                              <div className="space-y-1.5 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-600">Total Due</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(jobCardDetail.paymentBalance.totalDue)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-600">Total Paid</span>
+                                  <span className="font-semibold text-emerald-600">{formatCurrency(jobCardDetail.paymentBalance.totalPaid)}</span>
+                                </div>
+                                {jobCardDetail.paymentBalance.remainingBalance > 0 && (
+                                  <div className="flex items-center justify-between border-t border-slate-200 pt-1.5">
+                                    <span className="text-slate-600">Remaining Balance</span>
+                                    <span className="font-bold text-red-600">{formatCurrency(jobCardDetail.paymentBalance.remainingBalance)}</span>
+                                  </div>
+                                )}
+                                {jobCardDetail.paymentBalance.paymentCount > 0 && (
+                                  <div className="text-xs text-slate-500 pt-1">
+                                    {jobCardDetail.paymentBalance.paymentCount} payment{jobCardDetail.paymentBalance.paymentCount > 1 ? 's' : ''} received
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <p className="mt-2 text-xs text-slate-500">Payment tracking unlocks once a job card is created.</p>
@@ -2339,10 +2381,10 @@ export const OrdersPage = () => {
                       <span>Spare Parts Subtotal</span>
                       <span className="font-semibold text-slate-900">{formatCurrency(sparePartsSubtotal)}</span>
                     </div>
-                    <div className="flex items-center justify-between text-slate-600">
+                    {/* <div className="flex items-center justify-between text-slate-600">
                       <span>Additional Services</span>
                       <span className="font-semibold text-slate-900">{formatCurrency(extraWorksSubtotal)}</span>
-                    </div>
+                    </div> */}
                     {jobCard?.additionalCharges ? (
                       <div className="flex items-center justify-between text-slate-600">
                         <span>Additional Charges</span>
@@ -2351,11 +2393,11 @@ export const OrdersPage = () => {
                     ) : null}
                     <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-slate-600">
                       <span>Subtotal</span>
-                      <span className="font-semibold text-slate-900">{formatCurrency(servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0))}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0))}</span>
                     </div>
                     <div className="flex items-center justify-between text-slate-600">
                       <span>Tax (18%)</span>
-                      <span className="font-semibold text-slate-900">{formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0)) * 0.18)}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency((servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0)) * 0.18)}</span>
                     </div>
                     <div className="flex items-center justify-between text-slate-600">
                       <span>Discount</span>
@@ -2363,7 +2405,7 @@ export const OrdersPage = () => {
                     </div>
                     <div className="flex items-center justify-between border-t-2 border-slate-300 pt-2 text-base font-bold text-slate-900">
                       <span>Grand Total</span>
-                      <span className="text-lg">{formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal + (jobCard?.additionalCharges ?? 0)) * 1.18)}</span>
+                      <span className="text-lg">{formatCurrency((servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0)) * 1.18)}</span>
                     </div>
                   </div>
                 </div>

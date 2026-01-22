@@ -79,6 +79,7 @@ export interface Order {
   serviceCategory: { _id: string; name: string };
   serviceItem: { _id: string; name: string };
   status: string;
+  paymentStatus?: string;
   scheduledAt: string;
   timeWindowStart: string;
   timeWindowEnd: string;
@@ -248,6 +249,14 @@ export interface JobCardDetail {
     updatedAt?: string;
   } | null;
   payments?: PaymentRecord[];
+  paymentBalance?: {
+    totalDue: number;
+    totalPaid: number;
+    remainingBalance: number;
+    isFullyPaid: boolean;
+    isPartiallyPaid: boolean;
+    paymentCount: number;
+  } | null;
 }
 
 export interface OrderFilters {

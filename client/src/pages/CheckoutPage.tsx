@@ -838,7 +838,7 @@ export const CheckoutPage = () => {
               )}
 
               <div className="flex gap-3">
-                <button
+                {/* <button
                   onClick={() => {
                     setShowPaymentModal(false)
                     clearCart()
@@ -847,7 +847,7 @@ export const CheckoutPage = () => {
                   className="flex-1 px-4 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Pay Later
-                </button>
+                </button> */}
                 <button
                   onClick={processPayment}
                   disabled={!selectedPaymentMethod || processingPayment}

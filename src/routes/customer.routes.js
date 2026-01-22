@@ -14,6 +14,9 @@ import {
   getInvoice,
   getOrder,
   getPaymentStatus,
+  getPaymentBalance,
+  getOrderPayments,
+  initializeRemainingPayment,
   getProfile,
   getJobCard,
   getServiceDetail,
@@ -142,6 +145,15 @@ router.post('/payments/init-with-orders',
 );
 router.post('/payments/confirm', paymentConfirmValidator, confirmPayment);
 router.get('/payments/:paymentId', paymentStatusValidator, getPaymentStatus);
+router.get('/orders/:orderId/payment-balance', authenticate, getPaymentBalance);
+router.get('/orders/:orderId/payments', authenticate, getOrderPayments);
+router.post('/orders/:orderId/payments/remaining', 
+  authenticate,
+  validate([
+    body('method').isIn(['cash', 'razorpay', 'razorpay_card', 'razorpay_upi', 'razorpay_netbanking', 'razorpay_wallet'])
+  ]),
+  initializeRemainingPayment
+);
 
 router.get('/history', orderHistoryQueryValidator, getHistory);
 

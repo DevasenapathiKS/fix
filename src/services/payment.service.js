@@ -7,6 +7,80 @@ import env from '../config/env.js';
 import ApiError from '../utils/api-error.js';
 
 export const PaymentService = {
+  /**
+   * Calculate payment balance for an order
+   * Returns total paid, total due, and remaining balance
+   */
+  async calculatePaymentBalance(orderId) {
+    const order = await Order.findById(orderId).lean();
+    if (!order) throw new ApiError(404, 'Order not found');
+
+    // Get all successful payments for this order
+    const successfulPayments = await Payment.find({
+      order: orderId,
+      status: PAYMENT_STATUS.SUCCESS
+    }).lean();
+
+    const totalPaid = successfulPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    // Calculate total due (include GST)
+    const jobCard = await JobcardService.getJobCardByOrder(orderId).catch(() => null);
+    let subtotal = order.estimatedCost || 0;
+
+    if (jobCard) {
+      // If job card exists, use finalAmount (includes additional charges)
+      subtotal = jobCard.finalAmount || subtotal;
+    }
+
+    // Add 18% GST to subtotal for total due
+    const gstRate = 0.18;
+    const gstAmount = subtotal * gstRate;
+    const totalDue = subtotal + gstAmount;
+
+    const remainingBalance = Math.max(0, totalDue - totalPaid);
+    const isFullyPaid = remainingBalance === 0;
+    const isPartiallyPaid = totalPaid > 0 && remainingBalance > 0;
+
+    return {
+      totalDue,
+      totalPaid,
+      remainingBalance,
+      isFullyPaid,
+      isPartiallyPaid,
+      paymentCount: successfulPayments.length
+    };
+  },
+
+  /**
+   * Get all payments for an order
+   */
+  async getOrderPayments(orderId) {
+    return Payment.find({ order: orderId })
+      .sort({ createdAt: -1 })
+      .lean();
+  },
+
+  /**
+   * Update job card payment status based on payment balance
+   */
+  async updateJobCardPaymentStatus(orderId) {
+    const jobCard = await JobcardService.getJobCardByOrder(orderId).catch(() => null);
+    if (!jobCard) return;
+
+    const balance = await this.calculatePaymentBalance(orderId);
+
+    if (balance.isFullyPaid) {
+      jobCard.paymentStatus = 'paid';
+    } else if (balance.isPartiallyPaid) {
+      jobCard.paymentStatus = 'partial';
+    } else {
+      jobCard.paymentStatus = 'pending';
+    }
+
+    await jobCard.save();
+    return jobCard.paymentStatus;
+  },
+
   async recordPayment({ orderId, jobCardId, method, amount, transactionRef }) {
     const payment = await Payment.create({
       order: orderId,
@@ -18,8 +92,16 @@ export const PaymentService = {
       paidAt: new Date()
     });
 
-    await JobcardService.lockJobCard(jobCardId);
-    await Order.findByIdAndUpdate(orderId, { status: ORDER_STATUS.COMPLETED });
+    // Update payment status on job card
+    await this.updateJobCardPaymentStatus(orderId);
+
+    // Only lock and complete if fully paid
+    const balance = await this.calculatePaymentBalance(orderId);
+    if (balance.isFullyPaid) {
+      await JobcardService.lockJobCard(jobCardId);
+      await Order.findByIdAndUpdate(orderId, { status: ORDER_STATUS.COMPLETED });
+    }
+
     return payment;
   },
 
@@ -181,14 +263,21 @@ export const PaymentService = {
 
       await payment.save();
 
-      // If order already exists, complete it
-      if (payment.order) {
-        const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
-        if (jobCard) {
-          await JobcardService.lockJobCard(jobCard._id);
+        // Update payment status on job card and check if order should be completed
+        if (payment.order) {
+          // Update job card payment status (pending/partial/paid)
+          await this.updateJobCardPaymentStatus(payment.order);
+          
+          const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
+          if (jobCard) {
+            // Only lock and complete if fully paid
+            const balance = await this.calculatePaymentBalance(payment.order);
+            if (balance.isFullyPaid) {
+              await JobcardService.lockJobCard(jobCard._id);
+              await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
+            }
+          }
         }
-        await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
-      }
 
       return payment;
     }
@@ -242,13 +331,20 @@ export const PaymentService = {
         };
         await payment.save();
 
-        // If order exists, complete it
+        // Update payment status on job card and check if order should be completed
         if (payment.order) {
+          // Update job card payment status (pending/partial/paid)
+          await this.updateJobCardPaymentStatus(payment.order);
+          
           const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
           if (jobCard) {
-            await JobcardService.lockJobCard(jobCard._id);
+            // Only lock and complete if fully paid
+            const balance = await this.calculatePaymentBalance(payment.order);
+            if (balance.isFullyPaid) {
+              await JobcardService.lockJobCard(jobCard._id);
+              await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
+            }
           }
-          await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
         }
 
         return payment;
@@ -270,13 +366,21 @@ export const PaymentService = {
     
     await payment.save();
 
-    if (payment.order) {
-      const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
-      if (jobCard) {
-        await JobcardService.lockJobCard(jobCard._id);
-      }
-      await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
-    }
+        // Update payment status on job card and check if order should be completed
+        if (payment.order) {
+          // Update job card payment status (pending/partial/paid)
+          await this.updateJobCardPaymentStatus(payment.order);
+          
+          const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
+          if (jobCard) {
+            // Only lock and complete if fully paid
+            const balance = await this.calculatePaymentBalance(payment.order);
+            if (balance.isFullyPaid) {
+              await JobcardService.lockJobCard(jobCard._id);
+              await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
+            }
+          }
+        }
     return payment;
   },
 
@@ -310,11 +414,21 @@ export const PaymentService = {
           };
           await payment.save();
 
-          const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
-          if (jobCard) {
-            await JobcardService.lockJobCard(jobCard._id);
+          // Update payment status on job card and check if order should be completed
+          if (payment.order) {
+            // Update job card payment status (pending/partial/paid)
+            await this.updateJobCardPaymentStatus(payment.order);
+            
+            const jobCard = await JobcardService.getJobCardByOrder(payment.order).catch(() => null);
+            if (jobCard) {
+              // Only lock and complete if fully paid
+              const balance = await this.calculatePaymentBalance(payment.order);
+              if (balance.isFullyPaid) {
+                await JobcardService.lockJobCard(jobCard._id);
+                await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
+              }
+            }
           }
-          await Order.findByIdAndUpdate(payment.order, { status: ORDER_STATUS.COMPLETED });
         }
       }
 

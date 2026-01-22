@@ -384,9 +384,27 @@ export const AdminService = {
     const query = {};
     if (status) query.status = status;
     if (customerId) query.customerUser = customerId;
-    return Order.find(query)
+    const orders = await Order.find(query)
       .populate('serviceCategory serviceItem assignedTechnician', 'name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Get payment status from job cards
+    const orderIds = orders.map(o => o._id);
+    const jobCards = await JobCard.find({ order: { $in: orderIds } })
+      .select('order paymentStatus')
+      .lean();
+    
+    const paymentStatusMap = new Map();
+    jobCards.forEach(jc => {
+      paymentStatusMap.set(String(jc.order), jc.paymentStatus || 'pending');
+    });
+    
+    // Add payment status to each order
+    return orders.map(order => ({
+      ...order,
+      paymentStatus: paymentStatusMap.get(String(order._id)) || 'pending'
+    }));
   },
 
   async listCustomers() {
@@ -855,6 +873,10 @@ export const AdminService = {
 
     const payments = await Payment.find({ order: orderId }).sort({ createdAt: 1 }).lean();
 
+    // Calculate payment balance
+    const { PaymentService } = await import('./payment.service.js');
+    const paymentBalance = await PaymentService.calculatePaymentBalance(orderId).catch(() => null);
+
     return {
       order: {
         id: order._id,
@@ -901,7 +923,8 @@ export const AdminService = {
         paidAt: payment.paidAt,
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt
-      }))
+      })),
+      paymentBalance: paymentBalance || null
     };
   },
 
@@ -1175,7 +1198,19 @@ export const AdminService = {
       unitPrice: parseFloat(unitPrice)
     });
 
+    // Recalculate charges (updates additionalCharges and finalAmount)
+    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
+      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
+      0
+    );
+    jobCard.additionalCharges = extraTotal + spareTotal;
+    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
     await jobCard.save();
+
+    // Update payment status if payments exist
+    const { PaymentService } = await import('./payment.service.js');
+    await PaymentService.updateJobCardPaymentStatus(orderId);
 
     await orderHistoryService.recordEntry({
       orderId,
@@ -1255,7 +1290,19 @@ export const AdminService = {
       serviceItem: serviceItem
     });
 
+    // Recalculate charges (updates additionalCharges and finalAmount)
+    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
+      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
+      0
+    );
+    jobCard.additionalCharges = extraTotal + spareTotal;
+    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
     await jobCard.save();
+
+    // Update payment status if payments exist
+    const { PaymentService } = await import('./payment.service.js');
+    await PaymentService.updateJobCardPaymentStatus(orderId);
 
     await orderHistoryService.recordEntry({
       orderId,
@@ -1287,7 +1334,20 @@ export const AdminService = {
 
     const removedPart = jobCard.sparePartsUsed[index];
     jobCard.sparePartsUsed.splice(index, 1);
+    
+    // Recalculate charges
+    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
+      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
+      0
+    );
+    jobCard.additionalCharges = extraTotal + spareTotal;
+    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
     await jobCard.save();
+
+    // Update payment status if payments exist
+    const { PaymentService } = await import('./payment.service.js');
+    await PaymentService.updateJobCardPaymentStatus(orderId);
 
     const partInfo = typeof removedPart.part === 'object' ? removedPart.part : await SparePart.findById(removedPart.part);
     const partName = partInfo?.name || partInfo?.sku || 'Spare part';
@@ -1322,7 +1382,20 @@ export const AdminService = {
 
     const removedService = jobCard.extraWork[index];
     jobCard.extraWork.splice(index, 1);
+    
+    // Recalculate charges
+    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
+      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
+      0
+    );
+    jobCard.additionalCharges = extraTotal + spareTotal;
+    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
     await jobCard.save();
+
+    // Update payment status if payments exist
+    const { PaymentService } = await import('./payment.service.js');
+    await PaymentService.updateJobCardPaymentStatus(orderId);
 
     await orderHistoryService.recordEntry({
       orderId,
