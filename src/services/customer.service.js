@@ -701,6 +701,36 @@ export const CustomerService = {
     return payment;
   },
 
+  async getPaymentBalance(customerId, orderId) {
+    const order = await this.getOrderById(customerId, orderId);
+    return PaymentService.calculatePaymentBalance(order._id);
+  },
+
+  async getOrderPayments(customerId, orderId) {
+    const order = await this.getOrderById(customerId, orderId);
+    const payments = await PaymentService.getOrderPayments(order._id);
+    return payments;
+  },
+
+  async initializeRemainingPayment(customerId, orderId, method) {
+    const order = await this.getOrderById(customerId, orderId);
+    const balance = await PaymentService.calculatePaymentBalance(order._id);
+
+    if (balance.remainingBalance <= 0) {
+      throw new ApiError(400, 'Order is already fully paid');
+    }
+
+    // Initialize payment for remaining balance
+    const payment = await PaymentService.initializeCustomerPayment({
+      orderId: order._id,
+      customerId,
+      method,
+      amount: balance.remainingBalance
+    });
+
+    return payment;
+  },
+
   async getJobCardForCustomer(customerId, orderId) {
     const order = await Order.findOne({ _id: orderId, customerUser: customerId });
     if (!order) throw new ApiError(404, 'Order not found');

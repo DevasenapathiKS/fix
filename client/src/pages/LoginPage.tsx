@@ -29,8 +29,20 @@ export const LoginPage = () => {
     } catch (error: any) {
       console.error('Full login error:', error)
       console.error('Error response:', error.response)
-      const message = error.response?.data?.message || 'Login failed. Please try again.'
+      console.error('Error message:', error.message)
+      
+      // Extract error message from various possible locations
+      let message = 'Login failed. Please try again.'
+      if (error.response?.data?.message) {
+        message = error.response.data.message
+      } else if (error.response?.data?.error) {
+        message = error.response.data.error
+      } else if (error.message) {
+        message = error.message
+      }
+      
       toast.error(message)
+      setLoading(false) // Make sure loading is set to false on error
     } finally {
       setLoading(false)
     }
@@ -54,7 +66,13 @@ export const LoginPage = () => {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form 
+          className="mt-8 space-y-6" 
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSubmit(onSubmit)(e)
+          }}
+        >
           <div className="rounded-md shadow-sm space-y-4">
             <div>
               <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-1">

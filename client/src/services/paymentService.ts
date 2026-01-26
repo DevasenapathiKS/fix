@@ -92,4 +92,42 @@ export const paymentService = {
     const response = await apiClient.get(`/customer/payments/${paymentId}`)
     return response.data.data
   },
+
+  /**
+   * Get payment balance for an order
+   * @param orderId - Order ID
+   * @returns Payment balance details
+   */
+  async getPaymentBalance(orderId: string): Promise<{
+    totalDue: number
+    totalPaid: number
+    remainingBalance: number
+    isFullyPaid: boolean
+    isPartiallyPaid: boolean
+    paymentCount: number
+  }> {
+    const response = await apiClient.get(`/customer/orders/${orderId}/payment-balance`)
+    return response.data.data
+  },
+
+  /**
+   * Get all payments for an order
+   * @param orderId - Order ID
+   * @returns Array of payments
+   */
+  async getOrderPayments(orderId: string): Promise<Payment[]> {
+    const response = await apiClient.get(`/customer/orders/${orderId}/payments`)
+    return response.data.data
+  },
+
+  /**
+   * Initialize payment for remaining balance
+   * @param orderId - Order ID
+   * @param method - Payment method
+   * @returns Payment initialization response
+   */
+  async initializeRemainingPayment(orderId: string, method: PaymentMethod): Promise<PaymentInitResponse> {
+    const response = await apiClient.post(`/customer/orders/${orderId}/payments/remaining`, { method })
+    return response.data.data
+  },
 }

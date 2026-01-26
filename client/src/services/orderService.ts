@@ -44,6 +44,12 @@ export interface Order {
   timeWindowEnd: string
   notes?: string
   issueDescription?: string
+  media?: Array<{
+    _id?: string
+    url: string
+    kind?: 'image' | 'video' | 'document'
+    name?: string
+  }>
   createdAt: string
   updatedAt: string
   history?: Array<{
@@ -83,6 +89,7 @@ export const orderService = {
     finalAmount: number
     paymentStatus: string
     status: string
+    otp: string | null
     extraWork: Array<{ description: string; amount: number }>
     spareParts: Array<{ quantity: number; unitPrice: number }>
   }> => {

@@ -2,7 +2,9 @@ import { Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon, TrashIcon, MinusIcon, PlusIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { useCartStore } from '../../store/cartStore'
+import { useAuthStore } from '../../store/authStore'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 
 interface CartSidebarProps {
   isOpen: boolean
@@ -12,9 +14,16 @@ interface CartSidebarProps {
 export const CartSidebar = ({ isOpen, onClose }: CartSidebarProps) => {
   const navigate = useNavigate()
   const { items, removeItem, updateQuantity, getTotalPrice, clearCart } = useCartStore()
+  const { user } = useAuthStore()
   const totalPrice = getTotalPrice()
 
   const handleCheckout = () => {
+    if (!user) {
+      toast.error('Please login to proceed to checkout')
+      onClose()
+      navigate('/login')
+      return
+    }
     onClose()
     navigate('/checkout')
   }

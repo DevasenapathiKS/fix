@@ -141,6 +141,21 @@ export const getPaymentStatus = asyncHandler(async (req, res) => {
   return successResponse(res, { data: payment });
 });
 
+export const getPaymentBalance = asyncHandler(async (req, res) => {
+  const balance = await CustomerService.getPaymentBalance(req.user.id, req.params.orderId);
+  return successResponse(res, { data: balance });
+});
+
+export const getOrderPayments = asyncHandler(async (req, res) => {
+  const payments = await CustomerService.getOrderPayments(req.user.id, req.params.orderId);
+  return successResponse(res, { data: payments });
+});
+
+export const initializeRemainingPayment = asyncHandler(async (req, res) => {
+  const payment = await CustomerService.initializeRemainingPayment(req.user.id, req.params.orderId, req.body.method);
+  return successResponse(res, { status: 201, data: payment, message: 'Payment for remaining balance initiated' });
+});
+
 export const getHistory = asyncHandler(async (req, res) => {
   const history = await CustomerService.getHistory(req.user.id, { status: req.query.status });
   return successResponse(res, { data: history });
