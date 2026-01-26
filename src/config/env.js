@@ -29,8 +29,8 @@ const env = {
   // Public customer app URL used in email links
   customerAppUrl: process.env.CUSTOMER_APP_URL || 'https://fixzep.com/',
   // Razorpay configuration
-  razorpayKeyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_S6AgdWHdFSmyHt',
-  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || 'oEfjvz3ni04Gc5DcI4tMOoXq',
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || 'rzp_live_S6AfSXbPGGknvD',
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || 'CPlBbnidcqXtiBx4BlZOgvay',
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
 };
 
