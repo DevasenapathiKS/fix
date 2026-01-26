@@ -34,7 +34,8 @@ export const RazorpayService = {
       const options = {
         amount: Math.round(amount * 100), // Convert to paise
         currency,
-        receipt,
+        // Razorpay requires receipt length <= 40 characters
+        receipt: receipt && receipt.length > 40 ? receipt.slice(0, 40) : receipt,
         notes: {
           ...notes,
           created_by: 'fixzep'
@@ -58,7 +59,13 @@ export const RazorpayService = {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[Razorpay] Error creating order:', error);
-      throw new ApiError(500, `Failed to create Razorpay order: ${error.message}`);
+
+      // Razorpay SDK often nests details under error.error.description
+      const message =
+        (error && (error.error?.description || error.message)) ||
+        'Unknown error while creating Razorpay order';
+
+      throw new ApiError(500, `Failed to create Razorpay order: ${message}`);
     }
   },
 

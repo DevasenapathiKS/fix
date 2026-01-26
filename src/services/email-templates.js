@@ -93,7 +93,7 @@ export const buildOrderConfirmationEmail = ({ order, customerName, customerEmail
           <td style="padding:8px 0;color:#111827;">${address}</td>
         </tr>
         <tr>
-          <td style="padding:8px 0;color:#6b7280;">Estimated Cost:</td>
+          <td style="padding:8px 0;color:#6b7280;">Estimated Cost (incl. GST):</td>
           <td style="padding:8px 0;color:#059669;font-weight:600;">${formatCurrency(order.estimatedCost)}</td>
         </tr>
       </table>
@@ -110,7 +110,7 @@ export const buildOrderConfirmationEmail = ({ order, customerName, customerEmail
   `;
 
   const subject = `Order Confirmed - #${order.orderCode || 'N/A'} | Fixzep`;
-  const text = `Order Confirmation\n\nHi ${customerName || 'Customer'},\n\nYour order #${order.orderCode || 'N/A'} for ${serviceName} has been confirmed.\n\nScheduled Date: ${scheduledDate}\nService Address: ${address}\nEstimated Cost: ${formatCurrency(order.estimatedCost)}\n\nWe'll notify you once a technician has been assigned.\n\nThanks,\nThe Fixzep Team`;
+  const text = `Order Confirmation\n\nHi ${customerName || 'Customer'},\n\nYour order #${order.orderCode || 'N/A'} for ${serviceName} has been confirmed.\n\nScheduled Date: ${scheduledDate}\nService Address: ${address}\nEstimated Cost (incl. GST): ${formatCurrency(order.estimatedCost)}\n\nWe'll notify you once a technician has been assigned.\n\nThanks,\nThe Fixzep Team`;
 
   return {
     to: customerEmail,
@@ -278,6 +278,11 @@ export const buildInvoiceEmail = ({ order, jobCard, payment, customerName, custo
   const additionalCharges = jobCard?.additionalCharges || 0;
   const finalAmount = jobCard?.finalAmount || payment?.amount || baseAmount + additionalCharges;
 
+  // GST calculation (18% of service subtotal)
+  const gstRate = 0.18;
+  const gstAmount = finalAmount * gstRate;
+  const totalWithGst = finalAmount + gstAmount;
+
   const sparePartsRows = (jobCard?.sparePartsUsed || []).map(item => `
     <tr>
       <td style="padding:12px;border-bottom:1px solid #e5e7eb;color:#111827;">${item.part?.name || 'Spare Part'}</td>
@@ -343,8 +348,16 @@ export const buildInvoiceEmail = ({ order, jobCard, payment, customerName, custo
         </tbody>
         <tfoot>
           <tr style="background:#f9fafb;">
-            <td style="padding:16px;text-align:right;font-weight:600;color:#111827;font-size:16px;" colspan="3">Total Amount:</td>
-            <td style="padding:16px;text-align:right;font-weight:700;color:#059669;font-size:18px;">${formatCurrency(finalAmount)}</td>
+            <td style="padding:12px 16px;text-align:right;font-weight:500;color:#374151;font-size:14px;" colspan="3">Subtotal (before GST):</td>
+            <td style="padding:12px 16px;text-align:right;font-weight:600;color:#111827;font-size:14px;">${formatCurrency(finalAmount)}</td>
+          </tr>
+          <tr style="background:#f9fafb;">
+            <td style="padding:8px 16px;text-align:right;font-weight:500;color:#4b5563;font-size:13px;" colspan="3">GST (18%):</td>
+            <td style="padding:8px 16px;text-align:right;font-weight:600;color:#111827;font-size:13px;">${formatCurrency(gstAmount)}</td>
+          </tr>
+          <tr style="background:#f9fafb;">
+            <td style="padding:16px 16px 20px 16px;text-align:right;font-weight:600;color:#111827;font-size:16px;" colspan="3">Total Amount (incl. GST):</td>
+            <td style="padding:16px 16px 20px 16px;text-align:right;font-weight:700;color:#059669;font-size:18px;">${formatCurrency(totalWithGst)}</td>
           </tr>
           ${payment ? `
           <tr>
@@ -366,7 +379,7 @@ export const buildInvoiceEmail = ({ order, jobCard, payment, customerName, custo
   `;
 
   const subject = `Invoice - #${order.orderCode || 'N/A'} | Fixzep`;
-  const text = `Invoice\n\nHi ${customerName || 'Customer'},\n\nPlease find your invoice for order #${order.orderCode || 'N/A'}.\n\nService: ${serviceName}\nTotal Amount: ${formatCurrency(finalAmount)}\n\nThanks,\nThe Fixzep Team`;
+  const text = `Invoice\n\nHi ${customerName || 'Customer'},\n\nPlease find your invoice for order #${order.orderCode || 'N/A'}.\n\nService: ${serviceName}\nSubtotal (before GST): ${formatCurrency(finalAmount)}\nGST (18%): ${formatCurrency(gstAmount)}\nTotal Amount (incl. GST): ${formatCurrency(totalWithGst)}\n\nThanks,\nThe Fixzep Team`;
 
   return {
     to: customerEmail,

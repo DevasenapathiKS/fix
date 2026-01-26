@@ -63,7 +63,7 @@ export const OrderDetailPage = () => {
 
   const { user } = useAuthStore()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>('razorpay')
   const [processingPayment, setProcessingPayment] = useState(false)
 
   const sendMessageMutation = useMutation({
@@ -298,10 +298,18 @@ export const OrderDetailPage = () => {
             <p className="text-gray-600 text-lg mb-6 max-w-2xl">{statusMessage.description}</p>
             
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="inline-flex items-center space-x-2 bg-white px-6 py-3 rounded-lg shadow-sm">
-                <DocumentTextIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm font-medium text-gray-600">Order ID:</span>
-                <span className="text-sm font-mono font-bold text-gray-900">{order.orderCode}</span>
+              <div className="inline-flex items-center space-x-4 bg-white px-6 py-3 rounded-lg shadow-sm">
+                <div className="flex items-center space-x-2">
+                  <DocumentTextIcon className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-600">Order ID:</span>
+                  <span className="text-sm font-mono font-bold text-gray-900">{order.orderCode}</span>
+                </div>
+                {jobCard?.otp && (
+                  <div className="flex items-center space-x-1 text-sm">
+                    <span className="text-gray-500">OTP:</span>
+                    <span className="font-mono font-semibold tracking-widest text-gray-900">{jobCard.otp}</span>
+                  </div>
+                )}
               </div>
               <span
                 className={`${statusConfig.bg} ${statusConfig.color} ${statusConfig.border} border px-6 py-3 rounded-lg font-bold text-sm shadow-sm`}
@@ -551,6 +559,49 @@ export const OrderDetailPage = () => {
               </div>
             </motion.div>
 
+            {/* Documents & Photos (read-only, mirrors admin job sheet) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+              className="bg-white rounded-2xl shadow-md p-6 sm:p-8"
+            >
+              <div className="flex items-center mb-4">
+                <DocumentTextIcon className="w-6 h-6 text-primary-600 mr-3" />
+                <h2 className="text-xl font-bold text-gray-900">Documents &amp; Photos</h2>
+              </div>
+
+              {order.media && order.media.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {order.media.map((doc: any, idx: number) => (
+                    <div
+                      key={doc._id ?? `${doc.url}-${idx}`}
+                      className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden"
+                    >
+                      {doc.kind === 'image' ? (
+                        <img
+                          src={doc.url}
+                          alt={doc.name || `Image ${idx + 1}`}
+                          className="w-full h-32 object-cover"
+                        />
+                      ) : doc.kind === 'video' ? (
+                        <div className="bg-black">
+                          <video src={doc.url} className="w-full h-32 object-cover" controls />
+                        </div>
+                      ) : (
+                        <div className="h-32 flex flex-col items-center justify-center px-3 text-center text-xs text-gray-600">
+                          <span className="font-semibold mb-1">Document</span>
+                          <span className="line-clamp-2 break-all">{doc.name || 'File'}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No documents uploaded for this order.</p>
+              )}
+            </motion.div>
+
             {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -643,9 +694,12 @@ export const OrderDetailPage = () => {
                       </div>
                       
                       {/* Pay Remaining Amount Button */}
-                      {paymentBalance.remainingBalance > 0 && (
+                      {jobCard?.paymentStatus !== 'paid' && paymentBalance.remainingBalance > 0 && (
                         <button
-                          onClick={() => setShowPaymentModal(true)}
+                          onClick={() => {
+                            setSelectedPaymentMethod('razorpay')
+                            setShowPaymentModal(true)
+                          }}
                           className="w-full mt-3 bg-primary-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
                         >
                           Pay Remaining ₹{paymentBalance.remainingBalance.toFixed(2)}
@@ -697,25 +751,6 @@ export const OrderDetailPage = () => {
 
               <div className="space-y-3 mb-6">
                 <button
-                  onClick={() => setSelectedPaymentMethod('cash')}
-                  className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedPaymentMethod === 'cash'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">Cash on Delivery</h4>
-                      <p className="text-sm text-gray-600">Pay when service is completed</p>
-                    </div>
-                    {selectedPaymentMethod === 'cash' && (
-                      <CheckCircleIcon className="w-6 h-6 text-primary-600" />
-                    )}
-                  </div>
-                </button>
-
-                <button
                   onClick={() => setSelectedPaymentMethod('razorpay')}
                   className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
                     selectedPaymentMethod === 'razorpay'
@@ -736,7 +771,7 @@ export const OrderDetailPage = () => {
               </div>
 
               <div className="flex gap-3">
-                <button
+                {/* <button
                   onClick={() => {
                     setShowPaymentModal(false)
                     setSelectedPaymentMethod(null)
@@ -744,52 +779,18 @@ export const OrderDetailPage = () => {
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
-                </button>
+                </button> */}
                 <button
                   onClick={async () => {
                     if (!selectedPaymentMethod || !user || !orderId) return
-                    
+
                     setProcessingPayment(true)
                     try {
-                      if (selectedPaymentMethod === 'cash') {
-                        const paymentInit = await paymentService.initializeRemainingPayment(orderId, 'cash')
-                        await paymentService.confirmPayment({
-                          paymentId: paymentInit._id,
-                          orderId,
-                          transactionRef: `cash_${Date.now()}`
-                        })
-                        toast.success('Cash payment selected. Technician will collect payment on-site.')
-                        setShowPaymentModal(false)
-                        queryClient.invalidateQueries({ queryKey: ['orderPaymentBalance', orderId] })
-                        queryClient.invalidateQueries({ queryKey: ['orderPayments', orderId] })
-                        queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
-                      } else if (selectedPaymentMethod === 'razorpay') {
+                      if (selectedPaymentMethod === 'razorpay') {
                         const paymentInit = await paymentService.initializeRemainingPayment(orderId, 'razorpay')
-                        
+
                         if (!paymentInit.razorpayOrder) {
                           throw new Error('Failed to initialize Razorpay payment')
-                        }
-
-                        // Load Razorpay script
-                        const loadRazorpayScript = () => {
-                          return new Promise((resolve) => {
-                            if (window.Razorpay) {
-                              resolve(true)
-                              return
-                            }
-                            const script = document.createElement('script')
-                            script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-                            script.onload = () => resolve(true)
-                            script.onerror = () => resolve(false)
-                            document.body.appendChild(script)
-                          })
-                        }
-
-                        const scriptLoaded = await loadRazorpayScript()
-                        if (!scriptLoaded) {
-                          toast.error('Razorpay SDK failed to load. Please try again.')
-                          setProcessingPayment(false)
-                          return
                         }
 
                         const options = {
@@ -825,7 +826,7 @@ export const OrderDetailPage = () => {
                             contact: user?.phone || ''
                           },
                           theme: {
-                            color: '#4F46E5'
+                            color: '#0f172a'
                           },
                           modal: {
                             ondismiss: () => {
@@ -835,15 +836,15 @@ export const OrderDetailPage = () => {
                           }
                         }
 
-                        const rzp = new window.Razorpay(options)
-                        rzp.on('payment.failed', (response: any) => {
-                          toast.error(response.error.description || 'Payment failed')
+                        const razorpay = new window.Razorpay(options)
+                        razorpay.on('payment.failed', (response: any) => {
+                          toast.error(`Payment failed: ${response.error.description || 'Unknown error'}`)
                           setProcessingPayment(false)
                         })
-                        rzp.open()
+                        razorpay.open()
                       }
                     } catch (error: any) {
-                      toast.error(error?.response?.data?.message || 'Failed to process payment')
+                      toast.error(error?.response?.data?.message || 'Payment processing failed')
                       setProcessingPayment(false)
                     }
                   }}

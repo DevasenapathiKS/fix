@@ -26,7 +26,7 @@ export interface AuthResponse {
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('Login attempt with:', { identifier: credentials.identifier })
-    console.log('API URL:', import.meta.env.VITE_API_URL || 'https://admin.eopsys.xyz/api')
+    console.log('API URL:', import.meta.env.VITE_API_URL || 'https://admin.fixzep.com/api')
     const response = await apiClient.post('/customer/auth/login', credentials)
     console.log('Login response:', response.data)
     return response.data.data

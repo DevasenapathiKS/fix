@@ -168,19 +168,11 @@ export const CheckoutPage = () => {
       const totalAmount = orderPayloads.reduce((sum, payload) => sum + (payload.estimatedCost || 0), 0)
 
       if (selectedPaymentMethod === 'cash') {
-        // For cash, initialize payment first (payment-first flow)
-        // Then create orders after payment is "confirmed" (cash is COD, so immediate)
-        try {
-          const paymentInit = await paymentService.initializePaymentWithOrderData({
-            orderData: orderPayloads,
-            customerId: user.id,
-            method: selectedPaymentMethod,
-            amount: totalAmount
-          })
+        // For cash on delivery, just create orders without marking payment as received.
+        // This keeps the order as "unpaid" so the customer can later pay online from the job card.
+        setPlacingOrders(true)
 
-          // For cash, payment is immediately "confirmed" (COD), so create orders now
-          setPlacingOrders(true)
-          
+        try {
           const results = await Promise.allSettled(
             orderPayloads.map((p) => orderService.createOrder(p))
           )
@@ -192,20 +184,12 @@ export const CheckoutPage = () => {
             throw new Error('Failed to create orders')
           }
 
-          // Confirm cash payment with first order
-          const firstOrder = fulfilled[0]
-          await paymentService.confirmPayment({
-            paymentId: paymentInit._id,
-            orderId: firstOrder._id,
-            transactionRef: `cash_${Date.now()}`
-          })
-
-          toast.success(`Orders placed successfully! ${fulfilled.length} order${fulfilled.length > 1 ? 's' : ''} created. Payment will be collected on service delivery.`)
+          toast.success(`Orders placed successfully! ${fulfilled.length} order${fulfilled.length > 1 ? 's' : ''} created. You selected Cash on Delivery, but you can also pay online later from your job card.`)
           clearCart()
           setShowPaymentModal(false)
           navigate('/orders')
         } catch (error: any) {
-          toast.error(error?.response?.data?.message || 'Failed to process payment')
+          toast.error(error?.response?.data?.message || 'Failed to place order with Cash on Delivery')
         } finally {
           setPlacingOrders(false)
           setProcessingPayment(false)
