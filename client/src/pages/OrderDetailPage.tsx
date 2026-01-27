@@ -296,7 +296,7 @@ export const OrderDetailPage = () => {
               {statusMessage.title}
             </h1>
             <p className="text-gray-600 text-lg mb-6 max-w-2xl">{statusMessage.description}</p>
-            
+
             <div className="flex flex-col sm:flex-row items-center gap-4">
               <div className="inline-flex items-center space-x-4 bg-white px-6 py-3 rounded-lg shadow-sm">
                 <div className="flex items-center space-x-2">
@@ -425,12 +425,12 @@ export const OrderDetailPage = () => {
                   <p className="text-sm font-medium text-gray-500">Scheduled Service</p>
                   <div className="flex items-center gap-2">
                     <p className="text-base font-semibold text-gray-900">
-                    {formatDateTime(order.timeWindowStart)}
-                  </p>
-                  <span className="mx-1 text-black/50">→</span>
-                  <p className="text-sm text-gray-600">
-                    {formatDateTime(order.timeWindowEnd)}
-                  </p>
+                      {formatDateTime(order.timeWindowStart)}
+                    </p>
+                    <span className="mx-1 text-black/50">→</span>
+                    <p className="text-sm text-gray-600">
+                      {formatDateTime(order.timeWindowEnd)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -532,7 +532,7 @@ export const OrderDetailPage = () => {
               <div className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-xl">
                   <p className="font-semibold text-gray-900 mb-3">{order.customer.name}</p>
-                  
+
                   <div className="space-y-2 text-sm text-gray-600">
                     <p>{order.customer.addressLine1}</p>
                     {order.customer.addressLine2 && <p>{order.customer.addressLine2}</p>}
@@ -653,14 +653,14 @@ export const OrderDetailPage = () => {
                 )}
                 <div className="space-y-2 text-sm">
                   {order.services.map((service: any) => (
-                    <div className="flex justify-between"><span className="text-gray-600">{service.serviceName}</span><span className="text-gray-600">₹{jobCard.estimateAmount.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">{service.serviceName}</span><span className="text-gray-600">₹{service.estimatedCost.toFixed(2)}</span></div>
                   ))}
                   {/* <div className="flex justify-between"><span className="text-gray-600">Estimate</span><span className="font-semibold">₹{jobCard.estimateAmount.toFixed(2)}</span></div> */}
                   {/* <div className="flex justify-between"><span className="text-gray-600">Additional</span><span className="font-semibold">₹{jobCard.additionalCharges.toFixed(2)}</span></div> */}
                   <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Subtotal</span><span className="text-gray-900 font-bold">₹{subtotal.toFixed(2)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-600">GST (18%)</span><span className="font-semibold">₹{gstAmount.toFixed(2)}</span></div>
                   <div className="border-t pt-2 flex justify-between"><span className="text-gray-900 font-medium">Grand Total</span><span className="text-primary-600 font-bold">₹{grandTotal.toFixed(2)}</span></div>
-                  
+
                   {/* Payment Balance Information */}
                   {paymentBalance && (
                     <>
@@ -676,14 +676,13 @@ export const OrderDetailPage = () => {
                           </div>
                         )}
                         <div className="text-xs text-gray-500 mt-1">
-                          Payment Status: <span className={`font-semibold ${
-                            paymentBalance.isFullyPaid ? 'text-green-600' : 
-                            paymentBalance.isPartiallyPaid ? 'text-yellow-600' : 
-                            'text-red-600'
-                          }`}>
-                            {paymentBalance.isFullyPaid ? 'Fully Paid' : 
-                             paymentBalance.isPartiallyPaid ? 'Partially Paid' : 
-                             'Pending Payment'}
+                          Payment Status: <span className={`font-semibold ${paymentBalance.isFullyPaid ? 'text-green-600' :
+                              paymentBalance.isPartiallyPaid ? 'text-yellow-600' :
+                                'text-red-600'
+                            }`}>
+                            {paymentBalance.isFullyPaid ? 'Fully Paid' :
+                              paymentBalance.isPartiallyPaid ? 'Partially Paid' :
+                                'Pending Payment'}
                           </span>
                         </div>
                         {orderPayments.length > 0 && (
@@ -692,7 +691,7 @@ export const OrderDetailPage = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Pay Remaining Amount Button */}
                       {jobCard?.paymentStatus !== 'paid' && paymentBalance.remainingBalance > 0 && (
                         <button
@@ -744,19 +743,31 @@ export const OrderDetailPage = () => {
               animate={{ opacity: 1, scale: 1 }}
               className="bg-white rounded-xl p-6 max-w-md w-full"
             >
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Pay Remaining Amount</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Pay Remaining Amount</h3>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
               <p className="text-gray-600 mb-4">
                 Remaining balance: <span className="font-bold text-primary-600">₹{paymentBalance.remainingBalance.toFixed(2)}</span>
               </p>
 
+
               <div className="space-y-3 mb-6">
                 <button
                   onClick={() => setSelectedPaymentMethod('razorpay')}
-                  className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedPaymentMethod === 'razorpay'
+                  className={`w-full p-4 border-2 rounded-lg text-left transition-all ${selectedPaymentMethod === 'razorpay'
                       ? 'border-primary-600 bg-primary-50'
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
