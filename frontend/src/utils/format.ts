@@ -10,6 +10,6 @@ export const formatCurrency = (value?: number | null, currency: string = 'INR') 
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
-    maximumFractionDigits: 0
+    maximumFractionDigits: 2
   }).format(amount);
 };

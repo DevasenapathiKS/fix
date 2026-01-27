@@ -131,18 +131,33 @@ export const CheckoutPage = () => {
       return
     }
 
-    // Prepare order data (but don't create orders yet)
-    const payloads: CreateOrderData[] = items.map((item) => {
-      const subtotal = item.price * item.quantity
+    // Group items by category - items in same category go into one order
+    const itemsByCategory = items.reduce<Record<string, typeof items>>((acc, item) => {
+      const categoryId = item.categoryId
+      if (!acc[categoryId]) {
+        acc[categoryId] = []
+      }
+      acc[categoryId].push(item)
+      return acc
+    }, {})
+
+    // Prepare order data - one order per category
+    const payloads: CreateOrderData[] = Object.entries(itemsByCategory).map(([, categoryItems]) => {
+      // Calculate total cost for all items in this category
+      const subtotal = categoryItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
       const gst = subtotal * gstRate
       const estimatedCost = +(subtotal + gst + serviceCharges)
+
+      // Create services array with all items in this category
+      const services = categoryItems.map((item) => ({
+        serviceItem: item.serviceId,
+        serviceCategory: item.categoryId,
+        quantity: item.quantity,
+        issueDescription: data.notes,
+      }))
+
       return {
-        services: [{
-          serviceItem: item.serviceId,
-          serviceCategory: item.categoryId,
-          quantity: item.quantity,
-          issueDescription: data.notes,
-        }],
+        services,
         customerAddressId: selectedAddress._id,
         preferredStart: selectedSlot.slot.start,
         preferredEnd: selectedSlot.slot.end,
@@ -694,8 +709,10 @@ export const CheckoutPage = () => {
                   </p>
                   <p className="text-sm text-gray-700">
                     {selectedSlot.slot.label} (
-                    {format(new Date(selectedSlot.slot.start), 'hh:mm a')} -{' '}
-                    {format(new Date(selectedSlot.slot.end), 'hh:mm a')})
+                      {formatInTimeZone(selectedSlot.slot.start,"UTC","hh:mm a")} - {formatInTimeZone(selectedSlot.slot.end,"UTC", 'hh:mm a')}
+                    {/* {format(new Date(selectedSlot.slot.start), 'hh:mm a')} -{' '}
+                    {format(new Date(selectedSlot.slot.end), 'hh:mm a')} */}
+                    )
                   </p>
                 </div>
               )}

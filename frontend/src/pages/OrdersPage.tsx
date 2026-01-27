@@ -363,6 +363,8 @@ export const OrdersPage = () => {
     const unitPrice = part?.unitPrice ?? (typeof part?.part === 'object' ? part.part?.unitPrice ?? 0 : 0);
     return sum + quantity * unitPrice;
   }, 0);
+  const extraWorks = jobCard?.extraWork ?? [];
+  const extraWorksSubtotal = extraWorks.reduce((sum, work) => sum + (work?.amount ?? 0), 0);
   const serviceItemInfo = jobCardDetail?.order?.serviceItem;
   const serviceBasePrice = typeof serviceItemInfo === 'string' ? 0 : serviceItemInfo?.basePrice ?? 0;
   const servicePrice = jobCard?.estimateAmount ?? jobCardDetail?.order?.estimatedCost ?? serviceBasePrice;
@@ -2381,23 +2383,27 @@ export const OrdersPage = () => {
                       <span>Spare Parts Subtotal</span>
                       <span className="font-semibold text-slate-900">{formatCurrency(sparePartsSubtotal)}</span>
                     </div>
-                    {/* <div className="flex items-center justify-between text-slate-600">
+                    <div className="flex items-center justify-between text-slate-600">
                       <span>Additional Services</span>
                       <span className="font-semibold text-slate-900">{formatCurrency(extraWorksSubtotal)}</span>
-                    </div> */}
-                    {jobCard?.additionalCharges ? (
+                    </div>
+                    {/* {jobCard?.additionalCharges ? (
                       <div className="flex items-center justify-between text-slate-600">
                         <span>Additional Charges</span>
                         <span className="font-semibold text-slate-900">{formatCurrency(jobCard.additionalCharges)}</span>
                       </div>
-                    ) : null}
+                    ) : null} */}
                     <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-slate-600">
                       <span>Subtotal</span>
-                      <span className="font-semibold text-slate-900">{formatCurrency(servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0))}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency(servicePrice + sparePartsSubtotal + extraWorksSubtotal)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-600">
                       <span>Tax (18%)</span>
-                      <span className="font-semibold text-slate-900">{formatCurrency((servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0)) * 0.18)}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal) * 0.18)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-600">
                       <span>Discount</span>
@@ -2405,7 +2411,9 @@ export const OrdersPage = () => {
                     </div>
                     <div className="flex items-center justify-between border-t-2 border-slate-300 pt-2 text-base font-bold text-slate-900">
                       <span>Grand Total</span>
-                      <span className="text-lg">{formatCurrency((servicePrice + sparePartsSubtotal  + (jobCard?.additionalCharges ?? 0)) * 1.18)}</span>
+                      <span className="text-lg">
+                        {formatCurrency((servicePrice + sparePartsSubtotal + extraWorksSubtotal) * 1.18)}
+                      </span>
                     </div>
                   </div>
                 </div>
