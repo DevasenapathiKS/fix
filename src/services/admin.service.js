@@ -1034,6 +1034,9 @@ export const AdminService = {
       if (!normalizedAttachments.length) {
         throw new ApiError(400, 'Attach at least one image or video for follow up');
       }
+      if (order.assignedTechnician) {
+        await TechnicianCalendar.deleteOne({ order: orderId });
+      }
       order.assignedTechnician = null;
       order.followUp = {
         reason,
@@ -1046,6 +1049,10 @@ export const AdminService = {
         ...order.followUp,
         resolvedAt: new Date()
       };
+    }
+
+    if (status === ORDER_STATUS.CANCELLED && order.assignedTechnician) {
+      await TechnicianCalendar.deleteOne({ order: orderId });
     }
 
     order.status = status;
@@ -1170,7 +1177,7 @@ export const AdminService = {
       throw new ApiError(404, 'Spare part not found');
     }
 
-    const order = await Order.findById(orderId).select('status assignedTechnician');
+    const order = await Order.findById(orderId).select('status assignedTechnician customerUser');
     if (!order) {
       throw new ApiError(404, 'Order not found');
     }
@@ -1180,7 +1187,6 @@ export const AdminService = {
 
     let jobCard = await JobCard.findOne({ order: orderId });
     if (!jobCard) {
-      // Create job card if it doesn't exist
       if (!order.assignedTechnician) {
         throw new ApiError(400, 'Order must have an assigned technician before adding spare parts');
       }
@@ -1192,32 +1198,42 @@ export const AdminService = {
       });
     }
 
-    jobCard.sparePartsUsed.push({
+    const qty = parseFloat(quantity);
+    const up = parseFloat(unitPrice);
+    const entry = {
+      type: 'spare_part',
+      description: 'Spare part usage',
+      quantity: qty,
+      unitPrice: up,
       part: sparePartId,
-      quantity: parseFloat(quantity),
-      unitPrice: parseFloat(unitPrice)
-    });
+      amount: qty * up,
+      serviceName: sparePart.name || 'Part'
+    };
 
-    // Recalculate charges (updates additionalCharges and finalAmount)
-    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
-      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
-      0
-    );
-    jobCard.additionalCharges = extraTotal + spareTotal;
-    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
-    await jobCard.save();
-
-    // Update payment status if payments exist
-    const { PaymentService } = await import('./payment.service.js');
-    await PaymentService.updateJobCardPaymentStatus(orderId);
+    order.customerApproval = order.customerApproval || {};
+    order.customerApproval.status = 'pending';
+    order.customerApproval.requestedItems = [...(order.customerApproval.requestedItems || []), entry];
+    order.customerApproval.history = [
+      ...(order.customerApproval.history || []),
+      { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
+    ];
+    await order.save();
 
     await orderHistoryService.recordEntry({
       orderId,
-      action: 'SPARE_PART_ADDED',
-      message: `Added spare part: ${sparePart.name} (Qty: ${quantity})`,
+      action: 'SPARE_PARTS_REQUESTED',
+      message: `Spare part "${sparePart.name}" (Qty: ${quantity}) requested – pending customer approval`,
+      metadata: { sparePartId, quantity, unitPrice: up },
       performedBy: adminId
     });
+
+    if (order.customerUser) {
+      await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
+        recipient: order.customerUser,
+        orderId: order._id,
+        reason: 'spare_part'
+      });
+    }
 
     return this.getJobCardDetail(orderId);
   },
@@ -1233,7 +1249,7 @@ export const AdminService = {
     }
 
     const order = await Order.findById(orderId)
-      .select('status assignedTechnician serviceCategory serviceItem')
+      .select('status assignedTechnician serviceCategory serviceItem customerUser')
       .populate('serviceItem');
     if (!order) {
       throw new ApiError(404, 'Order not found');
@@ -1242,10 +1258,9 @@ export const AdminService = {
       throw new ApiError(400, 'Cannot modify completed jobs');
     }
 
-    // Get service item for category reference
     let serviceItem = null;
     let serviceCategory = null;
-    
+
     if (serviceItemId) {
       serviceItem = await ServiceItem.findById(serviceItemId);
       if (!serviceItem) {
@@ -1253,7 +1268,6 @@ export const AdminService = {
       }
       serviceCategory = serviceItem.category;
     } else {
-      // Use the order's service item and category as defaults
       if (order.serviceItem && typeof order.serviceItem === 'object') {
         serviceItem = order.serviceItem._id;
         serviceCategory = order.serviceItem.category;
@@ -1267,7 +1281,6 @@ export const AdminService = {
 
     let jobCard = await JobCard.findOne({ order: orderId });
     if (!jobCard) {
-      // Create job card if it doesn't exist
       if (!order.assignedTechnician) {
         throw new ApiError(400, 'Order must have an assigned technician before adding services');
       }
@@ -1279,37 +1292,42 @@ export const AdminService = {
       });
     }
 
-    if (!jobCard.extraWork) {
-      jobCard.extraWork = [];
-    }
+    const desc = description.trim();
+    const amt = parseFloat(amount);
+    const serviceName = (typeof serviceItem === 'object' && serviceItem?.name) ? serviceItem.name : (await ServiceItem.findById(serviceItem).select('name').lean())?.name || desc;
+    const entry = {
+      type: 'extra_work',
+      description: desc,
+      amount: amt,
+      serviceCategory,
+      serviceItem: typeof serviceItem === 'object' ? serviceItem._id : serviceItem,
+      serviceName
+    };
 
-    jobCard.extraWork.push({
-      description: description.trim(),
-      amount: parseFloat(amount),
-      serviceCategory: serviceCategory,
-      serviceItem: serviceItem
-    });
-
-    // Recalculate charges (updates additionalCharges and finalAmount)
-    const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const spareTotal = (jobCard.sparePartsUsed || []).reduce(
-      (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
-      0
-    );
-    jobCard.additionalCharges = extraTotal + spareTotal;
-    jobCard.finalAmount = Number(jobCard.estimateAmount || 0) + jobCard.additionalCharges;
-    await jobCard.save();
-
-    // Update payment status if payments exist
-    const { PaymentService } = await import('./payment.service.js');
-    await PaymentService.updateJobCardPaymentStatus(orderId);
+    order.customerApproval = order.customerApproval || {};
+    order.customerApproval.status = 'pending';
+    order.customerApproval.requestedItems = [...(order.customerApproval.requestedItems || []), entry];
+    order.customerApproval.history = [
+      ...(order.customerApproval.history || []),
+      { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
+    ];
+    await order.save();
 
     await orderHistoryService.recordEntry({
       orderId,
-      action: 'SERVICE_ADDED',
-      message: `Added additional service: ${description}`,
+      action: 'ADDITIONAL_SERVICE_REQUESTED',
+      message: `Additional service "${desc}" (₹${amt}) requested – pending customer approval`,
+      metadata: { description: desc, amount: amt, serviceItemId: typeof serviceItem === 'object' ? serviceItem._id : serviceItem },
       performedBy: adminId
     });
+
+    if (order.customerUser) {
+      await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
+        recipient: order.customerUser,
+        orderId: order._id,
+        reason: 'extra_work'
+      });
+    }
 
     return this.getJobCardDetail(orderId);
   },

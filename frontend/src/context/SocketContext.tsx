@@ -23,7 +23,8 @@ export const SOCKET_EVENTS = {
   CUSTOMER_APPROVAL_UPDATED: 'CUSTOMER_APPROVAL_UPDATED',
   TECHNICIAN_UNASSIGNED: 'TECHNICIAN_UNASSIGNED',
   ORDER_CANCELLATION_REQUESTED: 'ORDER_CANCELLATION_REQUESTED',
-  ORDER_CANCELLED: 'ORDER_CANCELLED'
+  ORDER_CANCELLED: 'ORDER_CANCELLED',
+  ORDER_ACTIVITY: 'ORDER_ACTIVITY'
 } as const;
 
 interface SocketContextType {
@@ -33,6 +34,8 @@ interface SocketContextType {
   clearNotifications: () => void;
   unreadCount: number;
   soundEnabled: boolean;
+  joinOrder: (orderId: string) => void;
+  leaveOrder: (orderId: string) => void;
 }
 
 interface NotificationItem {
@@ -54,6 +57,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [audioUnlocked, setAudioUnlocked] = useState(true);
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const userRef = useRef<{ id?: string; role?: string } | null>(null);
 
   // Initialize audio element
   useEffect(() => {
@@ -228,6 +232,8 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       reconnectionDelay: 1000
     });
 
+    userRef.current = user;
+
     socketInstance.on('connect', () => {
       console.log('[Socket] Connected:', socketInstance.id);
       setIsConnected(true);
@@ -294,6 +300,11 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
           if (payload?.orderId) {
             queryClient.invalidateQueries({ queryKey: ['order-jobcard', payload.orderId] });
           }
+        } else if (event === SOCKET_EVENTS.ORDER_ACTIVITY) {
+          if (payload?.orderId) {
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['order-jobcard', payload.orderId] });
+          }
         }
       });
     });
@@ -304,13 +315,26 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       socketInstance.disconnect();
       setSocket(null);
       setIsConnected(false);
+      userRef.current = null;
     };
   }, [addNotification, showToastNotification, playNotificationSound, queryClient]);
+
+  const joinOrder = useCallback((orderId: string) => {
+    if (socket?.connected && orderId && userRef.current?.id) {
+      socket.emit('order:join', { orderId, userId: userRef.current.id, role: 'admin' });
+    }
+  }, [socket]);
+
+  const leaveOrder = useCallback((orderId: string) => {
+    if (socket?.connected && orderId) {
+      socket.emit('order:leave', { orderId });
+    }
+  }, [socket]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, notifications, clearNotifications, unreadCount, soundEnabled: audioUnlocked }}>
+    <SocketContext.Provider value={{ socket, isConnected, notifications, clearNotifications, unreadCount, soundEnabled: audioUnlocked, joinOrder, leaveOrder }}>
       {children}
     </SocketContext.Provider>
   );

@@ -34,11 +34,13 @@ import {
   rejectAdditionalItems,
   searchServices,
   postOrderMessage,
+  uploadOrderMedia,
   updateAddress,
   updateProfile,
   deactivateAccount
 } from '../controllers/customer.controller.js';
 import { authenticate, allowCustomerOnly } from '../middlewares/auth.middleware.js';
+import { upload } from '../middlewares/upload.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import {
   addressCreateValidator,
@@ -112,6 +114,12 @@ router.get('/orders/:orderId/additional', orderIdValidator, getAdditionalItems);
 router.post('/orders/:orderId/approve', approvalDecisionValidator, approveAdditionalItems);
 router.post('/orders/:orderId/reject', approvalDecisionValidator, rejectAdditionalItems);
 router.post('/orders/:orderId/messages', orderMessageValidator, postOrderMessage);
+router.post(
+  '/orders/:orderId/media',
+  validate([param('orderId').isMongoId().withMessage('Invalid order id')]),
+  upload.array('images', 10),
+  uploadOrderMedia
+);
 router.post(
   '/orders/:orderId/rating',
   validate([

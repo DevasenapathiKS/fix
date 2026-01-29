@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
+import { SocketProvider } from './context/SocketContext'
 import { Topbar } from './components/common/Topbar'
 import { LocationBanner } from './components/LocationBanner'
 import { HomePage } from './pages/HomePage'
@@ -30,9 +31,10 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Toaster position="top-right" />
-        <div className="min-h-screen bg-gray-50">
+      <SocketProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" />
+          <div className="min-h-screen bg-gray-50">
           <LocationBanner />
           <Topbar />
           <Routes>
@@ -51,6 +53,7 @@ function App() {
           </Routes>
         </div>
       </BrowserRouter>
+      </SocketProvider>
     </QueryClientProvider>
   )
 }

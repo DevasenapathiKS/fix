@@ -16,6 +16,11 @@ import {
   ShoppingBagIcon,
   CheckIcon,
   WrenchScrewdriverIcon,
+  ArrowUpTrayIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+  XMarkIcon,
+  UserCircleIcon,
 } from '@heroicons/react/24/outline'
 
 declare global {
@@ -25,17 +30,38 @@ declare global {
 }
 import { orderService } from '../services/orderService'
 import { paymentService, type PaymentMethod } from '../services/paymentService'
-import { format } from 'date-fns'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { formatDateTime } from '../utils/helpers'
 import { useAuthStore } from '../store/authStore'
+import { useSocket, ORDER_ACTIVITY } from '../context/SocketContext'
 import toast from 'react-hot-toast'
+
+type ActivityEvent = {
+  id: string
+  title: string
+  description?: string
+  timestamp?: string
+  accent?: string
+  attachments?: Array<{ url: string; kind?: string; name?: string }>
+}
+
+const humanize = (value?: string) => {
+  if (!value) return ''
+  const normalized = value.replace(/_/g, ' ')
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+const formatActorName = (performer: any) => {
+  if (!performer) return 'System'
+  if (typeof performer === 'string') return performer
+  return performer?.name || 'System'
+}
 
 export const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [chatInput, setChatInput] = useState('')
+  // const [chatInput, setChatInput] = useState('')
 
   const { data: order, isLoading, error } = useQuery({
     queryKey: ['order', orderId],
@@ -61,18 +87,29 @@ export const OrderDetailPage = () => {
     enabled: !!orderId,
   })
 
+  const { data: technicianStatus } = useQuery({
+    queryKey: ['orderTechnicianStatus', orderId],
+    queryFn: () => orderService.getTechnicianStatus(orderId!),
+    enabled: !!orderId && !!order?.assignedTechnician,
+  })
+
   const { user } = useAuthStore()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>('razorpay')
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [imageViewer, setImageViewer] = useState<{ open: boolean; url: string | null }>({ open: false, url: null })
+  const [imageZoom, setImageZoom] = useState(100)
+  const MIN_ZOOM = 50
+  const MAX_ZOOM = 200
+  const ZOOM_STEP = 25
 
-  const sendMessageMutation = useMutation({
-    mutationFn: (message: string) => orderService.postMessage(orderId!, message),
-    onSuccess: () => {
-      setChatInput('')
-      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
-    },
-  })
+  // const sendMessageMutation = useMutation({
+  //   mutationFn: (message: string) => orderService.postMessage(orderId!, message),
+  //   onSuccess: () => {
+  //     setChatInput('')
+  //     queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+  //   },
+  // })
 
   const cancelOrderMutation = useMutation({
     mutationFn: (reason?: string) => orderService.cancelOrder(orderId!, reason),
@@ -81,6 +118,62 @@ export const OrderDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
     },
   })
+
+  const approveAdditionalMutation = useMutation({
+    mutationFn: (note?: string) => orderService.approveAdditionalItems(orderId!, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
+      toast.success('Additional items approved. They have been added to your job.')
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to approve')
+    },
+  })
+
+  const rejectAdditionalMutation = useMutation({
+    mutationFn: (note?: string) => orderService.rejectAdditionalItems(orderId!, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      queryClient.invalidateQueries({ queryKey: ['orderJobCard', orderId] })
+      toast.success('Additional items rejected.')
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to reject')
+    },
+  })
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadMediaMutation = useMutation({
+    mutationFn: (files: File[]) => orderService.uploadOrderMedia(orderId!, files),
+    onSuccess: (_, files) => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      toast.success(`${files.length} image${files.length > 1 ? 's' : ''} uploaded`)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'Failed to upload images')
+    },
+  })
+
+  const canUploadMedia = order && order.status !== 'completed' && order.status !== 'cancelled'
+
+  const socketContext = useSocket()
+  const { socket, joinOrder, leaveOrder, isConnected } = socketContext || {}
+  useEffect(() => {
+    if (!orderId || !user?.id) return
+    if (isConnected) joinOrder?.(orderId)
+    const onActivity = (payload: { orderId?: string }) => {
+      if (orderId && payload?.orderId != null && String(payload.orderId) === String(orderId)) {
+        queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      }
+    }
+    socket?.on?.(ORDER_ACTIVITY, onActivity)
+    return () => {
+      leaveOrder?.(orderId)
+      socket?.off?.(ORDER_ACTIVITY, onActivity)
+    }
+  }, [orderId, user?.id, isConnected, joinOrder, leaveOrder, queryClient, socket])
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
@@ -181,20 +274,110 @@ export const OrderDetailPage = () => {
     )
   }
 
-  // Timeline removed per request
+  // Activity feed: same structure as admin (history + follow-up, sorted by time)
+  const activityFeed = useMemo(() => {
+    if (!order) return []
+    const events: ActivityEvent[] = []
+    const history = order.history || []
 
-  const activity = useMemo(() => {
-    const entries = (order?.history || []).slice().sort((a: any, b: any) => {
-      const ta = new Date(a.performedAt || a.createdAt || 0).getTime()
-      const tb = new Date(b.performedAt || b.createdAt || 0).getTime()
-      return ta - tb
+    history.forEach((entry: any, idx: number) => {
+      if (!entry) return
+      let accent = 'bg-primary-500'
+      let title = humanize(entry.action) || 'Update'
+      switch ((entry.action || '').toLowerCase()) {
+        case 'technician_checked_in':
+          accent = 'bg-emerald-500'
+          title = 'Technician Checked In'
+          break
+        case 'technician_checked_out':
+          accent = 'bg-rose-500'
+          title = 'Technician Checked Out'
+          break
+        case 'technician_progress_update':
+          accent = 'bg-amber-500'
+          title = 'Progress Update'
+          break
+        case 'technician_follow_up':
+          accent = 'bg-orange-500'
+          title = 'Follow Up Required'
+          break
+        case 'technician_assigned':
+        case 'assigned':
+          accent = 'bg-indigo-500'
+          title = 'Technician Assigned'
+          break
+        case 'order_rescheduled':
+        case 'rescheduled':
+          accent = 'bg-purple-500'
+          title = 'Order Rescheduled'
+          break
+        case 'order_created':
+        case 'order_media_uploaded':
+        case 'order_media_deleted':
+          accent = 'bg-slate-600'
+          title = humanize(entry.action) || 'Update'
+          break
+        case 'chat_message':
+          accent = 'bg-blue-500'
+          title = 'Message'
+          break
+        case 'admin_note':
+          accent = 'bg-slate-500'
+          title = 'Support note'
+          break
+        case 'order_cancellation_requested':
+        case 'order_cancelled':
+          accent = 'bg-red-500'
+          title = humanize(entry.action) || 'Update'
+          break
+        default:
+          accent = 'bg-primary-500'
+      }
+      events.push({
+        id: `history-${idx}`,
+        title,
+        description: [entry.message, entry.performedBy ? `By ${formatActorName(entry.performedBy)}` : null]
+          .filter(Boolean)
+          .join(' • '),
+        timestamp: entry.performedAt || entry.createdAt,
+        accent
+      })
     })
-    return entries
-  }, [order?.history])
 
-  const chatMessages = useMemo(() => {
-    return (order?.history || []).filter((e: any) => (e.action || '').toLowerCase() === 'chat_message')
-  }, [order?.history])
+    if (order.followUp?.reason) {
+      events.push({
+        id: 'follow-up-start',
+        title: 'Follow Up Requested',
+        description: order.followUp.reason,
+        timestamp: order.followUp.createdAt,
+        accent: 'bg-orange-500',
+        attachments: order.followUp.attachments || []
+      })
+      if (order.followUp.resolvedAt) {
+        events.push({
+          id: 'follow-up-resolved',
+          title: 'Follow Up Resolved',
+          description: 'Case moved out of follow up',
+          timestamp: order.followUp.resolvedAt,
+          accent: 'bg-emerald-500'
+        })
+      }
+    }
+
+    const toTime = (value?: string) => {
+      if (!value) return Number.MAX_SAFE_INTEGER
+      const time = new Date(value).getTime()
+      return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time
+    }
+    return events.sort((a, b) => toTime(a.timestamp) - toTime(b.timestamp))
+  }, [order])
+
+  // const chatMessages = useMemo(() => {
+  //   return (order?.history || []).filter((e: any) => {
+  //     const a = (e.action || '').toLowerCase()
+  //     return a === 'chat_message' || a === 'admin_note'
+  //   })
+  // }, [order?.history])
 
   // Derived totals for Job Summary with safe fallbacks
   const gstRate = 0.18
@@ -443,7 +626,52 @@ export const OrderDetailPage = () => {
               )}
             </motion.div>
 
-            {/* Activity & Chat - Combined Card */}
+            {/* Pending approval: additional services / spare parts */}
+            {order.customerApproval?.status === 'pending' &&
+              (order.customerApproval.requestedItems?.length ?? 0) > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.32 }}
+                className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 p-6 sm:p-8"
+              >
+                <h3 className="text-lg font-bold text-amber-900 mb-2">Additional items requested</h3>
+                <p className="text-sm text-amber-800 mb-4">
+                  Your technician or support team has requested the following additions. Approve to add them to your job, or reject to decline.
+                </p>
+                <ul className="space-y-2 mb-6">
+                  {order.customerApproval.requestedItems!.map((item: any, idx: number) => (
+                    <li key={idx} className="flex justify-between items-center bg-white/80 rounded-lg px-4 py-3">
+                      <span className="font-medium text-gray-900">
+                        {item.label ?? item.serviceName ?? item.description ?? (item.type === 'spare_part' ? 'Spare part' : 'Additional service')}
+                        {item.quantity != null && item.quantity > 1 && ` × ${item.quantity}`}
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        ₹{((item.amount ?? 0) || ((item.quantity ?? 1) * (item.unitPrice ?? 0))).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => approveAdditionalMutation.mutate(undefined)}
+                    disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
+                    className="flex-1 py-3 px-4 rounded-lg font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {approveAdditionalMutation.isPending ? 'Approving…' : 'Approve'}
+                  </button>
+                  <button
+                    onClick={() => rejectAdditionalMutation.mutate(undefined)}
+                    disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
+                    className="flex-1 py-3 px-4 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {rejectAdditionalMutation.isPending ? 'Rejecting…' : 'Reject'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Activity & Chat - Combined Card (Activity Tracking like admin) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -455,32 +683,62 @@ export const OrderDetailPage = () => {
                 <span className="text-xs text-gray-500">Stay updated and message support</span>
               </div>
 
-              {/* Activity Section */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Activity</h3>
-                {activity.length === 0 ? (
-                  <p className="text-sm text-gray-500">No activity yet.</p>
+              {/* Activity Tracking (same structure as admin) */}
+              <div className="rounded-2xl border border-gray-100 p-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-gray-900">Activity Tracking</h4>
+                  {activityFeed.length > 0 && (
+                    <span className="text-xs text-gray-400">{activityFeed.length} entries</span>
+                  )}
+                </div>
+                {activityFeed.length === 0 ? (
+                  <p className="mt-2 text-xs text-gray-500">No activity recorded yet for this order.</p>
                 ) : (
-                  <div className="space-y-4 max-h-56 overflow-auto pr-1">
-                    {activity.map((entry: any, idx: number) => (
-                      <div key={entry._id || idx} className="flex items-start gap-3">
-                        <div className="w-2 h-2 mt-2 rounded-full bg-primary-600" />
-                        <div>
-                          <p className="text-sm text-gray-900">{entry.message || entry.action}</p>
-                          {entry.createdAt && (
-                            <p className="text-xs text-gray-500">{formatDateTime(entry.createdAt)}</p>
-                          )}
-                        </div>
-                      </div>
+                  <ol className="mt-4 space-y-4 border-l border-gray-200 pl-4 max-h-64 overflow-y-auto pr-2">
+                    {activityFeed.map((activity) => (
+                      <li key={activity.id} className="relative pl-4">
+                        <span className={`absolute -left-2 top-2 block h-3 w-3 rounded-full ${activity.accent || 'bg-gray-300'}`} />
+                        <p className="text-sm font-semibold text-gray-900">{activity.title}</p>
+                        {activity.description && <p className="text-xs text-gray-500">{activity.description}</p>}
+                        {activity.attachments && activity.attachments.length > 0 && (
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            {activity.attachments.map((att, idx) => (
+                              <div key={`${att.url}-${idx}`} className="rounded-lg overflow-hidden border border-gray-100 bg-white">
+                                {att.kind === 'video' ? (
+                                  <video src={att.url} className="w-full h-24 object-cover" controls />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setImageViewer({ open: true, url: att.url })
+                                      setImageZoom(100)
+                                    }}
+                                    className="block w-full text-left"
+                                  >
+                                    <img
+                                      src={att.url}
+                                      alt={att.name || 'Attachment'}
+                                      className="w-full h-24 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {activity.timestamp && (
+                          <p className="text-[11px] text-gray-400 mt-1">{formatDateTime(activity.timestamp)}</p>
+                        )}
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 )}
               </div>
 
-              <div className="my-6 border-t border-gray-200" />
+              {/* <div className="my-6 border-t border-gray-200" /> */}
 
               {/* Chat Section */}
-              <div>
+              {/* <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Chat</h3>
                 <div className="max-h-56 overflow-auto space-y-3 mb-4 pr-1">
                   {chatMessages.length === 0 ? (
@@ -511,12 +769,62 @@ export const OrderDetailPage = () => {
                     {sendMessageMutation.isPending ? 'Sending...' : 'Send'}
                   </button>
                 </div>
-              </div>
+              </div> */}
             </motion.div>
           </div>
 
           {/* Right Column - Address & Customer Info */}
           <div className="space-y-6">
+            {/* Technician details */}
+            {order.assignedTechnician && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.38 }}
+                className="bg-white rounded-2xl shadow-md p-6 sm:p-8 border border-primary-100"
+              >
+                <div className="flex items-center mb-5">
+                  <UserCircleIcon className="w-6 h-6 text-primary-600 mr-3" />
+                  <h2 className="text-xl font-bold text-gray-900">Your Technician</h2>
+                </div>
+                <div className="space-y-4">
+                  <p className="font-semibold text-gray-900 text-lg">
+                    {order.assignedTechnician.name || 'Technician'}
+                  </p>
+                  <div className="space-y-3">
+                    {order.assignedTechnician.mobile && (
+                      <div className="flex items-center text-sm">
+                        <PhoneIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                        <a
+                          href={`tel:${order.assignedTechnician.mobile}`}
+                          className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
+                        >
+                          {order.assignedTechnician.mobile}
+                        </a>
+                      </div>
+                    )}
+                    {order.assignedTechnician.email && (
+                      <div className="flex items-center text-sm">
+                        <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                        <a
+                          href={`mailto:${order.assignedTechnician.email}`}
+                          className="text-primary-600 hover:text-primary-700 hover:underline break-all"
+                        >
+                          {order.assignedTechnician.email}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                  {technicianStatus?.lastCheckInAt && (
+                    <div className="flex items-center text-sm text-gray-600 pt-2 border-t border-gray-100">
+                      <ClockIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                      <span>Last checked in {formatDateTime(technicianStatus.lastCheckInAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {/* Service Address */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -559,17 +867,46 @@ export const OrderDetailPage = () => {
               </div>
             </motion.div>
 
-            {/* Documents & Photos (read-only, mirrors admin job sheet) */}
+            {/* Documents & Photos – customer can upload issue images */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45 }}
               className="bg-white rounded-2xl shadow-md p-6 sm:p-8"
             >
-              <div className="flex items-center mb-4">
-                <DocumentTextIcon className="w-6 h-6 text-primary-600 mr-3" />
-                <h2 className="text-xl font-bold text-gray-900">Documents &amp; Photos</h2>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <DocumentTextIcon className="w-6 h-6 text-primary-600 mr-3" />
+                  <h2 className="text-xl font-bold text-gray-900">Documents &amp; Photos</h2>
+                </div>
+                {canUploadMedia && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files ? Array.from(e.target.files) : []
+                        if (files.length) uploadMediaMutation.mutate(files)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadMediaMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary-600 text-primary-600 hover:bg-primary-50 font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUpTrayIcon className="w-5 h-5" />
+                      {uploadMediaMutation.isPending ? 'Uploading...' : 'Upload images'}
+                    </button>
+                  </>
+                )}
               </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Upload photos of the issue you booked the service for. Helps our technician prepare.
+              </p>
 
               {order.media && order.media.length > 0 ? (
                 <div className="grid grid-cols-2 gap-3">
@@ -579,11 +916,20 @@ export const OrderDetailPage = () => {
                       className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden"
                     >
                       {doc.kind === 'image' ? (
-                        <img
-                          src={doc.url}
-                          alt={doc.name || `Image ${idx + 1}`}
-                          className="w-full h-32 object-cover"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageViewer({ open: true, url: doc.url })
+                            setImageZoom(100)
+                          }}
+                          className="block w-full text-left"
+                        >
+                          <img
+                            src={doc.url}
+                            alt={doc.name || `Image ${idx + 1}`}
+                            className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          />
+                        </button>
                       ) : doc.kind === 'video' ? (
                         <div className="bg-black">
                           <video src={doc.url} className="w-full h-32 object-cover" controls />
@@ -644,7 +990,7 @@ export const OrderDetailPage = () => {
                         <p className="text-sm font-semibold text-gray-900 mb-1">Spare Parts</p>
                         <ul className="space-y-1 text-sm text-gray-700">
                           {jobCard.spareParts.map((p, i) => (
-                            <li key={i} className="flex justify-between"><span>Qty {p.quantity}</span><span>₹{(p.quantity * p.unitPrice).toFixed(2)}</span></li>
+                            <li key={i} className="flex justify-between"><span>{p.name}(x{p.quantity})</span><span>₹{(p.quantity * p.unitPrice).toFixed(2)}</span></li>
                           ))}
                         </ul>
                       </div>
@@ -652,6 +998,7 @@ export const OrderDetailPage = () => {
                   </div>
                 )}
                 <div className="space-y-2 text-sm">
+                <p className="text-sm font-semibold text-gray-900 mb-1">Services</p>
                   {order.services.map((service: any) => (
                     <div className="flex justify-between"><span className="text-gray-600">{service.serviceName}</span><span className="text-gray-600">₹{service.estimatedCost.toFixed(2)}</span></div>
                   ))}
@@ -868,6 +1215,63 @@ export const OrderDetailPage = () => {
             </motion.div>
           </div>
         )}
+
+      {/* Image Viewer Modal – zoom in/out, close on overlay */}
+      {imageViewer.open && imageViewer.url && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setImageViewer({ open: false, url: null })}
+          role="dialog"
+          aria-modal="true"
+          aria-label="View image"
+        >
+          <div
+            className="relative m-top-10 flex min-w-[95vw] min-h-[95vh] flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setImageViewer({ open: false, url: null })}
+              className="absolute -top-10 right-0 rounded-full bg-white/90 p-2 text-gray-700 hover:bg-white z-10"
+              aria-label="Close"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+            <div className="overflow-auto rounded-lg bg-gray-900 flex items-center justify-center min-h-[200px]">
+              <img
+                src={imageViewer.url}
+                alt="Enlarged view"
+                className="min-w-[75vw] min-h-[75vh] object-contain transition-transform duration-200"
+                style={{ transform: `scale(${imageZoom / 100})` }}
+                draggable={false}
+              />
+            </div>
+            <div className="mt-4 flex items-center gap-3 rounded-full bg-white/90 px-4 py-2 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setImageZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP))}
+                disabled={imageZoom <= MIN_ZOOM}
+                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Zoom out"
+              >
+                <MagnifyingGlassMinusIcon className="w-6 h-6 text-gray-700" />
+              </button>
+              <span className="text-sm font-medium text-gray-800 min-w-[3rem] text-center">
+                {imageZoom}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setImageZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP))}
+                disabled={imageZoom >= MAX_ZOOM}
+                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Zoom in"
+              >
+                <MagnifyingGlassPlusIcon className="w-6 h-6 text-gray-700" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   )

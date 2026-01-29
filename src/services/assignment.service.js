@@ -34,6 +34,12 @@ export const AssignmentService = {
     const profile = await TechnicianProfile.findOne({ user: technicianId });
     if (!profile) throw new ApiError(404, 'Technician profile missing');
 
+    // Reassign: free previous technician's calendar before blocking the new one
+    const previousTechnicianId = order.assignedTechnician;
+    if (previousTechnicianId && String(previousTechnicianId) !== String(technicianId)) {
+      await TechnicianCalendar.deleteOne({ order: orderId });
+    }
+
     // if (!profile.serviceItems.map(String).includes(String(order.serviceItem))) {
     //   throw new ApiError(400, 'Technician skill mismatch');
     // }
