@@ -28,6 +28,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { CalendarDaysIcon, CheckCircleIcon, PrinterIcon, TrashIcon, XCircleIcon, XMarkIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDateTime } from '../utils/format';
+import { useSocket } from '../context/SocketContext';
 
 const getSlotIdentifier = (slot: TimeSlotTemplate) =>
   slot._id ?? `${slot.dayOfWeek}-${slot.startTime}-${slot.endTime}-${slot.label ?? ''}`;
@@ -239,6 +240,15 @@ export const OrdersPage = () => {
   const [additionalServiceQuantity, setAdditionalServiceQuantity] = useState('1');
   
   const queryClient = useQueryClient();
+  const { joinOrder, leaveOrder, isConnected } = useSocket();
+
+  const openOrderId = jobCardModal.open && jobCardModal.order?._id ? jobCardModal.order._id : null;
+  useEffect(() => {
+    if (openOrderId && isConnected) joinOrder(openOrderId);
+    return () => {
+      if (openOrderId) leaveOrder(openOrderId);
+    };
+  }, [openOrderId, isConnected, joinOrder, leaveOrder]);
 
   const closeAssignModal = () => {
     setAssignModal({ order: null, open: false });

@@ -1,12 +1,13 @@
 import JobCard from '../models/jobcard.model.js';
 import Order from '../models/order.model.js';
 import ServiceItem from '../models/service-item.model.js';
+import SparePart from '../models/spare-part.model.js';
 import ApiError from '../utils/api-error.js';
 import { JOB_STATUS, ORDER_STATUS, NOTIFICATION_EVENTS } from '../constants/index.js';
 import { notificationService } from './notification.service.js';
 import { orderHistoryService } from './order-history.service.js';
 
-const recalculateCharges = (jobCard) => {
+export const recalculateCharges = (jobCard) => {
   const extraTotal = (jobCard.extraWork || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const spareTotal = (jobCard.sparePartsUsed || []).reduce(
     (sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0),
@@ -183,28 +184,32 @@ export const JobcardService = {
       });
     }
 
-    jobCard.extraWork.push(...normalizedItems);
-    recalculateCharges(jobCard);
-    await jobCard.save();
-
     const order = await Order.findById(jobCard.order);
-    if (order) {
-      order.customerApproval = order.customerApproval || {};
-      order.customerApproval.status = 'pending';
-      order.customerApproval.requestedItems = [...(order.customerApproval.requestedItems || []), ...approvalEntries];
-      order.customerApproval.history = [
-        ...(order.customerApproval.history || []),
-        { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
-      ];
-      await order.save();
+    if (!order) throw new ApiError(404, 'Order missing for this job');
 
-      if (order.customerUser) {
-        await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
-          recipient: order.customerUser,
-          orderId: order._id,
-          reason: 'extra_work'
-        });
-      }
+    order.customerApproval = order.customerApproval || {};
+    order.customerApproval.status = 'pending';
+    order.customerApproval.requestedItems = [...(order.customerApproval.requestedItems || []), ...approvalEntries];
+    order.customerApproval.history = [
+      ...(order.customerApproval.history || []),
+      { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
+    ];
+    await order.save();
+
+    await orderHistoryService.recordEntry({
+      orderId: order._id,
+      action: 'ADDITIONAL_SERVICE_REQUESTED',
+      message: `${approvalEntries.length} additional service(s) requested (pending customer approval)`,
+      metadata: { count: approvalEntries.length, items: approvalEntries.map((e) => ({ description: e.description, amount: e.amount })) },
+      performedBy: technicianId
+    });
+
+    if (order.customerUser) {
+      await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
+        recipient: order.customerUser,
+        orderId: order._id,
+        reason: 'extra_work'
+      });
     }
 
     return jobCard;
@@ -220,38 +225,49 @@ export const JobcardService = {
       throw new ApiError(400, 'Check in before adding spare parts');
     }
 
-    jobCard.sparePartsUsed.push(...parts);
-    recalculateCharges(jobCard);
-    await jobCard.save();
-
     const order = await Order.findById(jobCard.order);
-    if (order) {
-      order.customerApproval = order.customerApproval || {};
-      order.customerApproval.status = 'pending';
-      order.customerApproval.requestedItems = [
-        ...(order.customerApproval.requestedItems || []),
-        ...parts.map((part) => ({
-          type: 'spare_part',
-          description: 'Spare part usage',
-          quantity: part.quantity,
-          unitPrice: part.unitPrice,
-          part: part.part,
-          amount: part.quantity * part.unitPrice
-        }))
-      ];
-      order.customerApproval.history = [
-        ...(order.customerApproval.history || []),
-        { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
-      ];
-      await order.save();
+    if (!order) throw new ApiError(404, 'Order missing for this job');
 
-      if (order.customerUser) {
-        await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
-          recipient: order.customerUser,
-          orderId: order._id,
-          reason: 'spare_part'
-        });
-      }
+    const partIds = [...new Set(parts.map((p) => p.part).filter(Boolean))];
+    const partDocs = await SparePart.find({ _id: { $in: partIds } }).select('name').lean();
+    const partNames = Object.fromEntries(partDocs.map((p) => [String(p._id), p.name || 'Part']));
+
+    const approvalEntries = parts.map((part) => ({
+      type: 'spare_part',
+      description: 'Spare part usage',
+      quantity: part.quantity,
+      unitPrice: part.unitPrice,
+      part: part.part,
+      amount: part.quantity * part.unitPrice,
+      serviceName: partNames[String(part.part)] || 'Part'
+    }));
+
+    order.customerApproval = order.customerApproval || {};
+    order.customerApproval.status = 'pending';
+    order.customerApproval.requestedItems = [
+      ...(order.customerApproval.requestedItems || []),
+      ...approvalEntries
+    ];
+    order.customerApproval.history = [
+      ...(order.customerApproval.history || []),
+      { status: 'pending', note: 'Awaiting customer approval', performedAt: new Date() }
+    ];
+    await order.save();
+
+    await orderHistoryService.recordEntry({
+      orderId: order._id,
+      action: 'SPARE_PARTS_REQUESTED',
+      message: `${parts.length} spare part(s) requested (pending customer approval)`,
+      metadata: { count: parts.length },
+      performedBy: technicianId
+    });
+
+    if (order.customerUser) {
+      await notificationService.notifyCustomer(order.customerUser, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_REQUIRED, {
+        recipient: order.customerUser,
+        orderId: order._id,
+        reason: 'spare_part'
+      });
     }
 
     return jobCard;
@@ -275,32 +291,6 @@ export const JobcardService = {
     recalculateCharges(jobCard);
     await jobCard.save();
 
-    const order = await Order.findById(jobCard.order);
-    if (order?.customerApproval?.requestedItems?.length) {
-      let removedSynced = false;
-      order.customerApproval.requestedItems = order.customerApproval.requestedItems.filter((item) => {
-        if (removedSynced) return true;
-        if (item.type !== 'extra_work') return true;
-        const matchesServiceItem =
-          (!removed.serviceItem && !item.serviceItem) ||
-          (removed.serviceItem && item.serviceItem && String(item.serviceItem) === String(removed.serviceItem));
-        const matchesServiceCategory =
-          (!removed.serviceCategory && !item.serviceCategory) ||
-          (removed.serviceCategory && item.serviceCategory && String(item.serviceCategory) === String(removed.serviceCategory));
-        const matchesAmount = Number(item.amount) === Number(removed.amount);
-        const matchesDescription = (item.description || '').trim() === (removed.description || '').trim();
-        if (matchesServiceItem && matchesServiceCategory && matchesAmount && matchesDescription) {
-          removedSynced = true;
-          return false;
-        }
-        return true;
-      });
-      if (!order.customerApproval.requestedItems.length) {
-        order.customerApproval.status = 'not_required';
-      }
-      await order.save();
-    }
-
     return jobCard;
   },
 
@@ -321,29 +311,6 @@ export const JobcardService = {
     const [removed] = jobCard.sparePartsUsed.splice(itemIndex, 1);
     recalculateCharges(jobCard);
     await jobCard.save();
-
-    const order = await Order.findById(jobCard.order);
-    if (order?.customerApproval?.requestedItems?.length) {
-      let removedSynced = false;
-      order.customerApproval.requestedItems = order.customerApproval.requestedItems.filter((item) => {
-        if (removedSynced) return true;
-        if (item.type !== 'spare_part') return true;
-        const matchesPart =
-          (!removed.part && !item.part) ||
-          (removed.part && item.part && String(item.part) === String(removed.part));
-        const matchesQty = Number(item.quantity) === Number(removed.quantity);
-        const matchesRate = Number(item.unitPrice) === Number(removed.unitPrice);
-        if (matchesPart && matchesQty && matchesRate) {
-          removedSynced = true;
-          return false;
-        }
-        return true;
-      });
-      if (!order.customerApproval.requestedItems.length) {
-        order.customerApproval.status = 'not_required';
-      }
-      await order.save();
-    }
 
     return jobCard;
   },

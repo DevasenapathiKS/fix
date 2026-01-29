@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AdminUserAPI, CatalogAPI, TechnicianSkillsAPI } from '../services/adminApi';
+import { AdminUserAPI, TechnicianSkillsAPI } from '../services/adminApi';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import toast from 'react-hot-toast';
-import type { ServiceItem, TechnicianSkill, UserPayload } from '../types';
+import type { TechnicianSkill, UserPayload } from '../types';
 
 const defaultValues: UserPayload = {
   name: '',
@@ -23,7 +23,7 @@ export const CreateUserPage = () => {
   const queryClient = useQueryClient();
   const form = useForm<UserPayload>({ defaultValues });
   const role = useWatch({ control: form.control, name: 'role' });
-  const { data: serviceItems = [] } = useQuery<ServiceItem[]>({ queryKey: ['serviceItems'], queryFn: () => CatalogAPI.serviceItems() });
+  // const { data: serviceItems = [] } = useQuery<ServiceItem[]>({ queryKey: ['serviceItems'], queryFn: () => CatalogAPI.serviceItems() });
   const { data: technicianSkills = [] } = useQuery<TechnicianSkill[]>({
     queryKey: ['technician-skills'],
     queryFn: TechnicianSkillsAPI.list
@@ -76,7 +76,7 @@ export const CreateUserPage = () => {
 
           {role === 'technician' && (
             <div className="col-span-2 grid gap-6">
-              <label className="flex flex-col gap-2 text-sm text-slate-600">
+              {/* <label className="flex flex-col gap-2 text-sm text-slate-600">
                 <span className="font-medium text-slate-900">Service capabilities</span>
                 <p className="text-xs text-slate-500">Select the catalog services this technician can perform.</p>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -93,7 +93,7 @@ export const CreateUserPage = () => {
                   ))}
                   {!serviceItems.length && <span className="text-xs text-slate-400">No services available.</span>}
                 </div>
-              </label>
+              </label> */}
 
               <label className="flex flex-col gap-2 text-sm text-slate-600">
                 <span className="font-medium text-slate-900">Technician skills</span>

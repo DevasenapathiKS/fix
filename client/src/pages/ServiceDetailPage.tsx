@@ -21,6 +21,15 @@ export const ServiceDetailPage = () => {
 
   const category = categories?.find((cat) => cat._id === categoryId)
 
+  // Scroll to highlighted service when available (must run before any early return to satisfy Rules of Hooks)
+  useEffect(() => {
+    if (!highlightedId) return
+    const el = document.getElementById(`svc-${highlightedId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightedId])
+
   const isInCart = (serviceId: string) => {
     return items.some((item) => item.serviceId === serviceId)
   }
@@ -78,14 +87,6 @@ export const ServiceDetailPage = () => {
       </div>
     )
   }
-  // Scroll to highlighted service when available
-  useEffect(() => {
-    if (!highlightedId) return
-    const el = document.getElementById(`svc-${highlightedId}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [highlightedId])
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">

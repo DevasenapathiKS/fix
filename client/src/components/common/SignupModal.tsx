@@ -138,7 +138,7 @@ export const SignupModal = ({ isOpen, onClose, onSwitchToLogin }: SignupModalPro
 
                       <div>
                         <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                          Phone Number (Optional)
+                          Phone Number
                         </label>
                         <input
                           id="phone"

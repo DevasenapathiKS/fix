@@ -1,7 +1,7 @@
 import asyncHandler from '../utils/async-handler.js';
-import { successResponse } from '../utils/response.js';
+import { successResponse, errorResponse } from '../utils/response.js';
 import { CustomerService } from '../services/customer.service.js';
-import { orderHistoryService } from '../services/order-history.service.js';
+import { uploadFileToS3 } from '../middlewares/upload.middleware.js';
 
 export const registerCustomer = asyncHandler(async (req, res) => {
   const result = await CustomerService.register(req.body);
@@ -179,6 +179,25 @@ export const getJobCard = asyncHandler(async (req, res) => {
 export const postOrderMessage = asyncHandler(async (req, res) => {
   const result = await CustomerService.sendOrderMessage(req.user.id, req.params.orderId, req.body.message);
   return successResponse(res, { status: 201, data: result, message: 'Message sent' });
+});
+
+export const uploadOrderMedia = asyncHandler(async (req, res) => {
+  const files = Array.isArray(req.files) ? req.files : (req.files ? [req.files] : []);
+  if (!files.length) {
+    return errorResponse(res, { status: 400, message: 'No images uploaded' });
+  }
+  const folder = 'customer-orders';
+  const mediaItems = [];
+  for (const file of files) {
+    const url = await uploadFileToS3(file, folder);
+    mediaItems.push({ url, kind: 'image', name: file.originalname });
+  }
+  const order = await CustomerService.addOrderMedia(req.user.id, req.params.orderId, mediaItems);
+  return successResponse(res, {
+    status: 201,
+    data: { media: order.media },
+    message: `${mediaItems.length} image${mediaItems.length > 1 ? 's' : ''} uploaded successfully`
+  });
 });
 
 export const deactivateAccount = asyncHandler(async (req, res) => {

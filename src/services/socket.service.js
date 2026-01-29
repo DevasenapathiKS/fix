@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import Order from '../models/order.model.js';
 
 class SocketService {
   constructor() {
@@ -48,6 +49,31 @@ class SocketService {
         }
       });
 
+      // Join order room for real-time activity (admin or customer)
+      socket.on('order:join', async (data) => {
+        const { orderId, userId, role } = data || {};
+        if (!orderId) return;
+        if (role === 'admin') {
+          socket.join(`order:${orderId}`);
+          console.log(`[Socket] Admin joined order ${orderId}`);
+          return;
+        }
+        if (role === 'customer' && userId) {
+          const order = await Order.findOne({ _id: orderId, customerUser: userId }).lean();
+          if (order) {
+            socket.join(`order:${orderId}`);
+            console.log(`[Socket] Customer ${userId} joined order ${orderId}`);
+          }
+        }
+      });
+
+      socket.on('order:leave', (data) => {
+        const { orderId } = data || {};
+        if (orderId) {
+          socket.leave(`order:${orderId}`);
+        }
+      });
+
       socket.on('disconnect', () => {
         console.log(`[Socket] Client disconnected: ${socket.id}`);
         // Clean up admin mapping
@@ -85,6 +111,13 @@ class SocketService {
     if (this.io) {
       this.io.to('technicians').emit(event, payload);
       console.log(`[Socket] Emitted ${event} to technicians`);
+    }
+  }
+
+  // Emit to everyone in an order room (admin + customer viewing that order)
+  emitToOrder(orderId, event, payload) {
+    if (this.io && orderId) {
+      this.io.to(`order:${orderId}`).emit(event, payload);
     }
   }
 

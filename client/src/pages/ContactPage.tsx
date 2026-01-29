@@ -153,7 +153,7 @@ export const ContactPage = () => {
                 <div className="space-y-3 text-gray-700">
                   <div className="flex items-center gap-3">
                     <PhoneIcon className="w-5 h-5 text-primary-600" />
-                    <span>Call us: +91 9585571110</span>
+                    <span>Call us: +91 8065429026</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <EnvelopeIcon className="w-5 h-5 text-primary-600" />

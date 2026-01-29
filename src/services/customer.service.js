@@ -21,6 +21,7 @@ import { notificationService, NOTIFICATION_EVENTS } from './notification.service
 import { PaymentService } from './payment.service.js';
 import { orderHistoryService } from './order-history.service.js';
 import { sendPasswordResetEmail, sendOrderConfirmationEmail, sendInvoiceEmail } from './email.service.js';
+import { recalculateCharges } from './jobcard.service.js';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -590,9 +591,51 @@ export const CustomerService = {
     if (order.customerApproval?.status !== 'pending') {
       throw new ApiError(400, 'No pending approvals');
     }
+    const requestedItems = order.customerApproval?.requestedItems || [];
+    if (!requestedItems.length) {
+      throw new ApiError(400, 'No pending items to approve');
+    }
+
+    const jobCard = await JobCard.findOne({ order: orderId });
+    if (!jobCard) {
+      throw new ApiError(404, 'Job card not found');
+    }
+
+    for (const item of requestedItems) {
+      if (item.type === 'extra_work') {
+        if (!jobCard.extraWork) jobCard.extraWork = [];
+        jobCard.extraWork.push({
+          description: item.description || 'Additional service',
+          amount: Number(item.amount) || 0,
+          serviceCategory: item.serviceCategory,
+          serviceItem: item.serviceItem
+        });
+      } else if (item.type === 'spare_part') {
+        if (!jobCard.sparePartsUsed) jobCard.sparePartsUsed = [];
+        jobCard.sparePartsUsed.push({
+          part: item.part,
+          quantity: Number(item.quantity) || 1,
+          unitPrice: Number(item.unitPrice) || 0
+        });
+      }
+    }
+    recalculateCharges(jobCard);
+    await jobCard.save();
+
+    await PaymentService.updateJobCardPaymentStatus(orderId);
+
+    order.customerApproval.requestedItems = [];
     order.customerApproval.status = 'approved';
-    order.customerApproval.history.push({ status: 'approved', note, performedAt: new Date() });
+    order.customerApproval.history.push({ status: 'approved', note: note || 'Customer approved', performedAt: new Date() });
     await order.save();
+
+    await addHistoryEntry({
+      orderId,
+      action: 'ADDITIONAL_ITEMS_APPROVED',
+      message: `Customer approved ${requestedItems.length} additional item(s)`,
+      metadata: { count: requestedItems.length },
+      performedBy: customerId
+    });
 
     if (order.assignedTechnician) {
       await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
@@ -600,6 +643,7 @@ export const CustomerService = {
         status: 'approved'
       });
     }
+
     return order.customerApproval;
   },
 
@@ -608,9 +652,18 @@ export const CustomerService = {
     if (order.customerApproval?.status !== 'pending') {
       throw new ApiError(400, 'No pending approvals');
     }
+    order.customerApproval.requestedItems = [];
     order.customerApproval.status = 'rejected';
-    order.customerApproval.history.push({ status: 'rejected', note, performedAt: new Date() });
+    order.customerApproval.history.push({ status: 'rejected', note: note || 'Customer rejected', performedAt: new Date() });
     await order.save();
+
+    await addHistoryEntry({
+      orderId,
+      action: 'ADDITIONAL_ITEMS_REJECTED',
+      message: 'Customer rejected additional items',
+      metadata: {},
+      performedBy: customerId
+    });
 
     if (order.assignedTechnician) {
       await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
@@ -734,7 +787,7 @@ export const CustomerService = {
   async getJobCardForCustomer(customerId, orderId) {
     const order = await Order.findOne({ _id: orderId, customerUser: customerId });
     if (!order) throw new ApiError(404, 'Order not found');
-    const jobCard = await JobCard.findOne({ order: orderId }).lean();
+    const jobCard = await JobCard.findOne({ order: orderId }).populate('sparePartsUsed.part', 'name').lean();
     if (!jobCard) throw new ApiError(404, 'Job card not found');
     return {
       estimateAmount: jobCard.estimateAmount || 0,
@@ -744,7 +797,7 @@ export const CustomerService = {
       status: jobCard.status,
       otp: jobCard.otp || null,
       extraWork: (jobCard.extraWork || []).map((w) => ({ description: w.description, amount: w.amount })),
-      spareParts: (jobCard.sparePartsUsed || []).map((p) => ({ quantity: p.quantity, unitPrice: p.unitPrice }))
+      spareParts: (jobCard.sparePartsUsed || []).map((p) => ({ name: p.part.name, quantity: p.quantity, unitPrice: p.unitPrice }))
     };
   },
 
@@ -760,6 +813,45 @@ export const CustomerService = {
       performedBy: customerId
     });
     return { ok: true };
+  },
+
+  async addOrderMedia(customerId, orderId, mediaItems = []) {
+    if (!Array.isArray(mediaItems) || !mediaItems.length) {
+      throw new ApiError(400, 'Provide at least one image');
+    }
+    const order = await Order.findOne({ _id: orderId, customerUser: customerId });
+    if (!order) throw new ApiError(404, 'Order not found');
+    if (order.status === ORDER_STATUS.COMPLETED || order.status === ORDER_STATUS.CANCELLED) {
+      throw new ApiError(400, 'Cannot add images to a completed or cancelled order');
+    }
+    const allowedKinds = ['image', 'video', 'document'];
+    const normalized = mediaItems
+      .filter((item) => item && item.url)
+      .map((item) => ({
+        url: item.url,
+        kind: allowedKinds.includes(item.kind) ? item.kind : 'image',
+        name: item.name,
+        uploadedBy: customerId,
+        uploadedAt: new Date()
+      }));
+    if (!normalized.length) {
+      throw new ApiError(400, 'Valid media payload is required');
+    }
+    order.media = [...(order.media || []), ...normalized];
+    await order.save();
+
+    await orderHistoryService.recordEntry({
+      orderId,
+      action: 'ORDER_MEDIA_UPLOADED',
+      message: `${normalized.length} image${normalized.length > 1 ? 's' : ''} uploaded`,
+      metadata: {
+        count: normalized.length,
+        media: normalized.map((item) => ({ url: item.url, kind: item.kind, name: item.name }))
+      },
+      performedBy: customerId
+    });
+
+    return order;
   },
 
   async getHistory(customerId, filters = {}) {
