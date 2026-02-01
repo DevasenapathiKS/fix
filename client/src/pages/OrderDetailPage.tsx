@@ -61,7 +61,7 @@ export const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  // const [chatInput, setChatInput] = useState('')
+  const [chatInput, setChatInput] = useState('')
 
   const { data: order, isLoading, error } = useQuery({
     queryKey: ['order', orderId],
@@ -103,13 +103,13 @@ export const OrderDetailPage = () => {
   const MAX_ZOOM = 200
   const ZOOM_STEP = 25
 
-  // const sendMessageMutation = useMutation({
-  //   mutationFn: (message: string) => orderService.postMessage(orderId!, message),
-  //   onSuccess: () => {
-  //     setChatInput('')
-  //     queryClient.invalidateQueries({ queryKey: ['order', orderId] })
-  //   },
-  // })
+  const sendMessageMutation = useMutation({
+    mutationFn: (message: string) => orderService.postMessage(orderId!, message),
+    onSuccess: () => {
+      setChatInput('')
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+    },
+  })
 
   const cancelOrderMutation = useMutation({
     mutationFn: (reason?: string) => orderService.cancelOrder(orderId!, reason),
@@ -629,47 +629,47 @@ export const OrderDetailPage = () => {
             {/* Pending approval: additional services / spare parts */}
             {order.customerApproval?.status === 'pending' &&
               (order.customerApproval.requestedItems?.length ?? 0) > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.32 }}
-                className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 p-6 sm:p-8"
-              >
-                <h3 className="text-lg font-bold text-amber-900 mb-2">Additional items requested</h3>
-                <p className="text-sm text-amber-800 mb-4">
-                  Your technician or support team has requested the following additions. Approve to add them to your job, or reject to decline.
-                </p>
-                <ul className="space-y-2 mb-6">
-                  {order.customerApproval.requestedItems!.map((item: any, idx: number) => (
-                    <li key={idx} className="flex justify-between items-center bg-white/80 rounded-lg px-4 py-3">
-                      <span className="font-medium text-gray-900">
-                        {item.label ?? item.serviceName ?? item.description ?? (item.type === 'spare_part' ? 'Spare part' : 'Additional service')}
-                        {item.quantity != null && item.quantity > 1 && ` × ${item.quantity}`}
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        ₹{((item.amount ?? 0) || ((item.quantity ?? 1) * (item.unitPrice ?? 0))).toFixed(2)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => approveAdditionalMutation.mutate(undefined)}
-                    disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
-                    className="flex-1 py-3 px-4 rounded-lg font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {approveAdditionalMutation.isPending ? 'Approving…' : 'Approve'}
-                  </button>
-                  <button
-                    onClick={() => rejectAdditionalMutation.mutate(undefined)}
-                    disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
-                    className="flex-1 py-3 px-4 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {rejectAdditionalMutation.isPending ? 'Rejecting…' : 'Reject'}
-                  </button>
-                </div>
-              </motion.div>
-            )}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.32 }}
+                  className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 p-6 sm:p-8"
+                >
+                  <h3 className="text-lg font-bold text-amber-900 mb-2">Additional items requested</h3>
+                  <p className="text-sm text-amber-800 mb-4">
+                    Your technician or support team has requested the following additions. Approve to add them to your job, or reject to decline.
+                  </p>
+                  <ul className="space-y-2 mb-6">
+                    {order.customerApproval.requestedItems!.map((item: any, idx: number) => (
+                      <li key={idx} className="flex justify-between items-center bg-white/80 rounded-lg px-4 py-3">
+                        <span className="font-medium text-gray-900">
+                          {item.label ?? item.serviceName ?? item.description ?? (item.type === 'spare_part' ? 'Spare part' : 'Additional service')}
+                          {item.quantity != null && item.quantity > 1 && ` × ${item.quantity}`}
+                        </span>
+                        <span className="font-semibold text-gray-900">
+                          ₹{((item.amount ?? 0) || ((item.quantity ?? 1) * (item.unitPrice ?? 0))).toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => approveAdditionalMutation.mutate(undefined)}
+                      disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
+                      className="flex-1 py-3 px-4 rounded-lg font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {approveAdditionalMutation.isPending ? 'Approving…' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => rejectAdditionalMutation.mutate(undefined)}
+                      disabled={approveAdditionalMutation.isPending || rejectAdditionalMutation.isPending}
+                      className="flex-1 py-3 px-4 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {rejectAdditionalMutation.isPending ? 'Rejecting…' : 'Reject'}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
 
             {/* Activity & Chat - Combined Card (Activity Tracking like admin) */}
             <motion.div
@@ -754,22 +754,24 @@ export const OrderDetailPage = () => {
                     ))
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Type your message..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-300"
-                  />
-                  <button
-                    onClick={() => chatInput.trim() && sendMessageMutation.mutate(chatInput)}
-                    disabled={sendMessageMutation.isPending || !chatInput.trim()}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:bg-gray-300"
-                  >
-                    {sendMessageMutation.isPending ? 'Sending...' : 'Send'}
-                  </button>
-                </div>
+                
               </div> */}
+
+              <div className="flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type your message..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-300"
+                />
+                <button
+                  onClick={() => chatInput.trim() && sendMessageMutation.mutate(chatInput)}
+                  disabled={sendMessageMutation.isPending || !chatInput.trim()}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg disabled:bg-gray-300"
+                >
+                  {sendMessageMutation.isPending ? 'Sending...' : 'Send'}
+                </button>
+              </div>
             </motion.div>
           </div>
 
@@ -1000,7 +1002,7 @@ export const OrderDetailPage = () => {
                   </div>
                 )}
                 <div className="space-y-2 text-sm">
-                <p className="text-sm font-semibold text-gray-900 mb-1">Services</p>
+                  <p className="text-sm font-semibold text-gray-900 mb-1">Services</p>
                   {order.services.map((service: any) => (
                     <div className="flex justify-between"><span className="text-gray-600">{service.serviceName}</span><span className="text-gray-600">₹{service.estimatedCost.toFixed(2)}</span></div>
                   ))}
@@ -1026,8 +1028,8 @@ export const OrderDetailPage = () => {
                         )}
                         <div className="text-xs text-gray-500 mt-1">
                           Payment Status: <span className={`font-semibold ${paymentBalance.isFullyPaid ? 'text-green-600' :
-                              paymentBalance.isPartiallyPaid ? 'text-yellow-600' :
-                                'text-red-600'
+                            paymentBalance.isPartiallyPaid ? 'text-yellow-600' :
+                              'text-red-600'
                             }`}>
                             {paymentBalance.isFullyPaid ? 'Fully Paid' :
                               paymentBalance.isPartiallyPaid ? 'Partially Paid' :
@@ -1114,8 +1116,8 @@ export const OrderDetailPage = () => {
                 <button
                   onClick={() => setSelectedPaymentMethod('razorpay')}
                   className={`w-full p-4 border-2 rounded-lg text-left transition-all ${selectedPaymentMethod === 'razorpay'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-primary-600 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -1218,62 +1220,62 @@ export const OrderDetailPage = () => {
           </div>
         )}
 
-      {/* Image Viewer Modal – zoom in/out, close on overlay */}
-      {imageViewer.open && imageViewer.url && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setImageViewer({ open: false, url: null })}
-          role="dialog"
-          aria-modal="true"
-          aria-label="View image"
-        >
+        {/* Image Viewer Modal – zoom in/out, close on overlay */}
+        {imageViewer.open && imageViewer.url && (
           <div
-            className="relative m-top-10 flex min-w-[95vw] min-h-[95vh] flex-col items-center"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setImageViewer({ open: false, url: null })}
+            role="dialog"
+            aria-modal="true"
+            aria-label="View image"
           >
-            <button
-              type="button"
-              onClick={() => setImageViewer({ open: false, url: null })}
-              className="absolute -top-10 right-0 rounded-full bg-white/90 p-2 text-gray-700 hover:bg-white z-10"
-              aria-label="Close"
+            <div
+              className="relative m-top-10 flex min-w-[95vw] min-h-[95vh] flex-col items-center"
+              onClick={(e) => e.stopPropagation()}
             >
-              <XMarkIcon className="w-6 h-6" />
-            </button>
-            <div className="overflow-auto rounded-lg bg-gray-900 flex items-center justify-center min-h-[200px]">
-              <img
-                src={imageViewer.url}
-                alt="Enlarged view"
-                className="min-w-[75vw] min-h-[75vh] object-contain transition-transform duration-200"
-                style={{ transform: `scale(${imageZoom / 100})` }}
-                draggable={false}
-              />
-            </div>
-            <div className="mt-4 flex items-center gap-3 rounded-full bg-white/90 px-4 py-2 shadow-lg">
               <button
                 type="button"
-                onClick={() => setImageZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP))}
-                disabled={imageZoom <= MIN_ZOOM}
-                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Zoom out"
+                onClick={() => setImageViewer({ open: false, url: null })}
+                className="absolute -top-10 right-0 rounded-full bg-white/90 p-2 text-gray-700 hover:bg-white z-10"
+                aria-label="Close"
               >
-                <MagnifyingGlassMinusIcon className="w-6 h-6 text-gray-700" />
+                <XMarkIcon className="w-6 h-6" />
               </button>
-              <span className="text-sm font-medium text-gray-800 min-w-[3rem] text-center">
-                {imageZoom}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setImageZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP))}
-                disabled={imageZoom >= MAX_ZOOM}
-                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Zoom in"
-              >
-                <MagnifyingGlassPlusIcon className="w-6 h-6 text-gray-700" />
-              </button>
+              <div className="overflow-auto rounded-lg bg-gray-900 flex items-center justify-center min-h-[200px]">
+                <img
+                  src={imageViewer.url}
+                  alt="Enlarged view"
+                  className="min-w-[75vw] min-h-[75vh] object-contain transition-transform duration-200"
+                  style={{ transform: `scale(${imageZoom / 100})` }}
+                  draggable={false}
+                />
+              </div>
+              <div className="mt-4 flex items-center gap-3 rounded-full bg-white/90 px-4 py-2 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => setImageZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP))}
+                  disabled={imageZoom <= MIN_ZOOM}
+                  className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Zoom out"
+                >
+                  <MagnifyingGlassMinusIcon className="w-6 h-6 text-gray-700" />
+                </button>
+                <span className="text-sm font-medium text-gray-800 min-w-[3rem] text-center">
+                  {imageZoom}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setImageZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP))}
+                  disabled={imageZoom >= MAX_ZOOM}
+                  className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Zoom in"
+                >
+                  <MagnifyingGlassPlusIcon className="w-6 h-6 text-gray-700" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
     </div>
   )
