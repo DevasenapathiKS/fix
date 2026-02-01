@@ -89,6 +89,7 @@ export interface Order {
     end?: string;
   };
   assignedTechnician?: { _id: string; name: string };
+  assignedTechnicians?: Array<{ _id: string; name?: string; mobile?: string } | string>;
 }
 
 export interface TechnicianCandidate {
@@ -230,6 +231,7 @@ export interface JobCardDetail {
     createdAt?: string;
     status?: string;
     assignedTechnician?: { _id?: string; name?: string; mobile?: string } | string;
+    assignedTechnicians?: Array<{ _id?: string; name?: string; mobile?: string } | string>;
     history?: OrderHistoryEntry[];
     media?: Array<{ _id?: string; url: string; kind?: 'image' | 'video' | 'document'; name?: string }>;
     followUp?: OrderFollowUpInfo | null;

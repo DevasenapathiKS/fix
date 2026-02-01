@@ -776,54 +776,56 @@ export const OrderDetailPage = () => {
           {/* Right Column - Address & Customer Info */}
           <div className="space-y-6">
             {/* Technician details */}
-            {order.assignedTechnician && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.38 }}
-                className="bg-white rounded-2xl shadow-md p-6 sm:p-8 border border-primary-100"
-              >
-                <div className="flex items-center mb-5">
-                  <UserCircleIcon className="w-6 h-6 text-primary-600 mr-3" />
-                  <h2 className="text-xl font-bold text-gray-900">Your Technician</h2>
-                </div>
-                <div className="space-y-4">
-                  <p className="font-semibold text-gray-900 text-lg">
-                    {order.assignedTechnician.name || 'Technician'}
-                  </p>
-                  <div className="space-y-3">
-                    {order.assignedTechnician.mobile && (
-                      <div className="flex items-center text-sm">
-                        <PhoneIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
-                        <a
-                          href={`tel:${order.assignedTechnician.mobile}`}
-                          className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
-                        >
-                          {order.assignedTechnician.mobile}
-                        </a>
-                      </div>
-                    )}
-                    {order.assignedTechnician.email && (
-                      <div className="flex items-center text-sm">
-                        <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
-                        <a
-                          href={`mailto:${order.assignedTechnician.email}`}
-                          className="text-primary-600 hover:text-primary-700 hover:underline break-all"
-                        >
-                          {order.assignedTechnician.email}
-                        </a>
+            {((order.assignedTechnicians?.length ?? 0) > 0 || order.assignedTechnician) && (() => {
+              const techs = (order.assignedTechnicians?.length ? order.assignedTechnicians : order.assignedTechnician ? [order.assignedTechnician] : []).filter(Boolean);
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.38 }}
+                  className="bg-white rounded-2xl shadow-md p-6 sm:p-8 border border-primary-100"
+                >
+                  <div className="flex items-center mb-5">
+                    <UserCircleIcon className="w-6 h-6 text-primary-600 mr-3" />
+                    <h2 className="text-xl font-bold text-gray-900">{techs.length > 1 ? 'Your Technicians' : 'Your Technician'}</h2>
+                  </div>
+                  <div className="space-y-5">
+                    {techs.map((tech: any, idx: number) => {
+                      const t = typeof tech === 'object' ? tech : { name: 'Technician' };
+                      const isPrimary = idx === 0;
+                      return (
+                        <div key={t._id || idx} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
+                          <p className="font-semibold text-gray-900 text-lg flex items-center gap-2">
+                            {t.name || 'Technician'}
+                            {isPrimary && techs.length > 1 && <span className="text-xs font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded">Primary</span>}
+                          </p>
+                          <div className="space-y-2 mt-2">
+                            {t.mobile && (
+                              <div className="flex items-center text-sm">
+                                <PhoneIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                                <a href={`tel:${t.mobile}`} className="text-primary-600 hover:text-primary-700 font-medium hover:underline">{t.mobile}</a>
+                              </div>
+                            )}
+                            {t.email && (
+                              <div className="flex items-center text-sm">
+                                <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                                <a href={`mailto:${t.email}`} className="text-primary-600 hover:text-primary-700 hover:underline break-all">{t.email}</a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {technicianStatus?.lastCheckInAt && (
+                      <div className="flex items-center text-sm text-gray-600 pt-2 border-t border-gray-100">
+                        <ClockIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
+                        <span>Last checked in {formatDateTime(technicianStatus.lastCheckInAt)}</span>
                       </div>
                     )}
                   </div>
-                  {technicianStatus?.lastCheckInAt && (
-                    <div className="flex items-center text-sm text-gray-600 pt-2 border-t border-gray-100">
-                      <ClockIcon className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
-                      <span>Last checked in {formatDateTime(technicianStatus.lastCheckInAt)}</span>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              );
+            })()}
 
             {/* Service Address */}
             <motion.div

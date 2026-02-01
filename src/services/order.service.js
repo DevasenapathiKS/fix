@@ -73,29 +73,34 @@ export const OrderService = {
     
     const start = new Date(newStart);
     const end = new Date(newEnd);
-    const previousTechnicianId = order.assignedTechnician;
-    
+    const previousIds = order.assignedTechnicians?.length
+      ? order.assignedTechnicians
+      : order.assignedTechnician
+        ? [order.assignedTechnician]
+        : [];
+
     // Update order with new schedule
     order.timeWindowStart = start;
     order.timeWindowEnd = end;
     order.scheduledAt = start;
     order.rescheduleCount += 1;
-    
+
     // Remove technician assignment and set status to pending
-    if (previousTechnicianId) {
-      // Delete the calendar entry for this order
-      await TechnicianCalendar.deleteOne({ order: orderId });
-      
+    if (previousIds.length) {
+      await TechnicianCalendar.deleteMany({ order: orderId });
+
       order.assignedTechnician = null;
+      order.assignedTechnicians = [];
       order.status = ORDER_STATUS.PENDING_ASSIGNMENT;
-      
-      // Notify the technician they've been unassigned
-      await notificationService.notifyTechnician(previousTechnicianId, NOTIFICATION_EVENTS.ORDER_RESCHEDULED, {
-        orderId: order._id,
-        newStart: start,
-        newEnd: end,
-        message: 'You have been unassigned from this order due to rescheduling'
-      });
+
+      for (const tid of previousIds) {
+        await notificationService.notifyTechnician(tid, NOTIFICATION_EVENTS.ORDER_RESCHEDULED, {
+          orderId: order._id,
+          newStart: start,
+          newEnd: end,
+          message: 'You have been unassigned from this order due to rescheduling'
+        });
+      }
     } else {
       order.status = ORDER_STATUS.RESCHEDULED;
     }
@@ -105,13 +110,13 @@ export const OrderService = {
     await addHistoryEntry({
       orderId: order._id,
       action: NOTIFICATION_EVENTS.ORDER_RESCHEDULED,
-      message: previousTechnicianId 
-        ? 'Order rescheduled by admin - technician unassigned' 
+      message: previousIds.length
+        ? 'Order rescheduled by admin - technician(s) unassigned'
         : 'Order rescheduled by admin',
-      metadata: { 
-        newStart: start, 
+      metadata: {
+        newStart: start,
         newEnd: end,
-        previousTechnician: previousTechnicianId || null
+        previousTechnicianIds: previousIds
       },
       performedBy: adminId
     });

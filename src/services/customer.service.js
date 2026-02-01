@@ -536,6 +536,7 @@ export const CustomerService = {
   async getOrderById(customerId, orderId, options = {}) {
     const query = Order.findOne({ _id: orderId, customerUser: customerId })
       .populate('serviceItem serviceCategory assignedTechnician', 'name email mobile')
+      .populate('assignedTechnicians', 'name email mobile')
       .populate('customerAddress');
 
     // Only use lean if not needing to save
@@ -564,6 +565,9 @@ export const CustomerService = {
           label: item.serviceName || item.description || item.type,
           rationale: item.description
         }));
+      }
+      if (!order.assignedTechnicians?.length && order.assignedTechnician) {
+        order.assignedTechnicians = [order.assignedTechnician];
       }
     }
 
@@ -637,11 +641,15 @@ export const CustomerService = {
       performedBy: customerId
     });
 
-    if (order.assignedTechnician) {
-      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
-        orderId: order._id,
-        status: 'approved'
-      });
+    const notifyIds = order.assignedTechnicians?.length ? order.assignedTechnicians : (order.assignedTechnician ? [order.assignedTechnician] : []);
+    for (const tid of notifyIds) {
+      const id = typeof tid === 'object' ? tid?._id : tid;
+      if (id) {
+        await notificationService.notifyTechnician(id, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
+          orderId: order._id,
+          status: 'approved'
+        });
+      }
     }
 
     return order.customerApproval;
@@ -665,11 +673,15 @@ export const CustomerService = {
       performedBy: customerId
     });
 
-    if (order.assignedTechnician) {
-      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
-        orderId: order._id,
-        status: 'rejected'
-      });
+    const rejectNotifyIds = order.assignedTechnicians?.length ? order.assignedTechnicians : (order.assignedTechnician ? [order.assignedTechnician] : []);
+    for (const tid of rejectNotifyIds) {
+      const id = typeof tid === 'object' ? tid?._id : tid;
+      if (id) {
+        await notificationService.notifyTechnician(id, NOTIFICATION_EVENTS.CUSTOMER_APPROVAL_UPDATED, {
+          orderId: order._id,
+          status: 'rejected'
+        });
+      }
     }
     return order.customerApproval;
   },
@@ -957,12 +969,15 @@ export const CustomerService = {
       reason
     });
 
-    // Notify technician if currently assigned
-    if (order.assignedTechnician) {
-      await notificationService.notifyTechnician(order.assignedTechnician, NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED, {
-        orderId: order._id,
-        reason
-      });
+    const cancelNotifyIds = order.assignedTechnicians?.length ? order.assignedTechnicians : (order.assignedTechnician ? [order.assignedTechnician] : []);
+    for (const tid of cancelNotifyIds) {
+      const id = typeof tid === 'object' ? tid?._id : tid;
+      if (id) {
+        await notificationService.notifyTechnician(id, NOTIFICATION_EVENTS.ORDER_CANCELLATION_REQUESTED, {
+          orderId: order._id,
+          reason
+        });
+      }
     }
 
     return order;

@@ -24,81 +24,95 @@ const generateUniqueJobCardOtp = async () => {
 };
 
 export const AssignmentService = {
-  async assignTechnician({ orderId, technicianId, adminId }) {
+  async assignTechnician({ orderId, technicianId, technicianIds, slots, adminId }) {
     const order = await Order.findById(orderId);
     if (!order) throw new ApiError(404, 'Order not found');
     if ([ORDER_STATUS.COMPLETED, ORDER_STATUS.CANCELLED].includes(order.status)) {
       throw new ApiError(400, 'Order can no longer be assigned');
     }
 
-    const profile = await TechnicianProfile.findOne({ user: technicianId });
-    if (!profile) throw new ApiError(404, 'Technician profile missing');
+    const ids = Array.isArray(technicianIds) && technicianIds.length
+      ? technicianIds
+      : technicianId
+        ? [technicianId]
+        : [];
+    if (!ids.length) throw new ApiError(400, 'At least one technician is required');
+    const primaryId = ids[0];
 
-    // Reassign: free previous technician's calendar before blocking the new one
-    const previousTechnicianId = order.assignedTechnician;
-    if (previousTechnicianId && String(previousTechnicianId) !== String(technicianId)) {
-      await TechnicianCalendar.deleteOne({ order: orderId });
+    for (const tid of ids) {
+      const profile = await TechnicianProfile.findOne({ user: tid });
+      if (!profile) throw new ApiError(404, `Technician profile missing for ${tid}`);
     }
 
-    // if (!profile.serviceItems.map(String).includes(String(order.serviceItem))) {
-    //   throw new ApiError(400, 'Technician skill mismatch');
-    // }
+    await TechnicianCalendar.deleteMany({ order: orderId });
 
-    const calendarEntries = await TechnicianCalendar.find({ technician: technicianId });
-    const available = isTechnicianAvailable({
-      calendarEntries,
-      requestedStart: order.timeWindowStart,
-      requestedEnd: order.timeWindowEnd
-    });
-    if (!available) {
-      throw new ApiError(400, 'Technician not available in the requested slot');
+    const slotsToBlock = Array.isArray(slots) && slots.length > 0
+      ? slots.map((s) => ({ start: new Date(s.start), end: new Date(s.end) }))
+      : order.timeWindowStart && order.timeWindowEnd
+        ? [{ start: order.timeWindowStart, end: order.timeWindowEnd }]
+        : [];
+    if (!slotsToBlock.length) {
+      throw new ApiError(400, 'Order has no time window and no slots provided');
     }
 
-    await TechnicianService.blockCalendar({
-      technicianId,
-      orderId: order._id,
-      start: order.timeWindowStart,
-      end: order.timeWindowEnd
-    });
+    for (const tid of ids) {
+      const calendarEntries = await TechnicianCalendar.find({ technician: tid });
+      for (const slot of slotsToBlock) {
+        const available = isTechnicianAvailable({
+          calendarEntries,
+          requestedStart: slot.start,
+          requestedEnd: slot.end
+        });
+        if (!available) {
+          throw new ApiError(400, `Technician not available in one or more selected slots`);
+        }
+      }
+      await TechnicianService.blockCalendar({
+        technicianId: tid,
+        orderId: order._id,
+        slots: slotsToBlock
+      });
+    }
 
-    order.assignedTechnician = technicianId;
+    order.assignedTechnician = primaryId;
+    order.assignedTechnicians = ids;
     order.status = ORDER_STATUS.ASSIGNED;
     await order.save();
 
     await addHistoryEntry({
-          orderId: order._id,
-          action: NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED,
-          message: `Technician assigned to order`,
-          metadata: { technicianId },
-          performedBy: adminId
-        });
-    
-
-    await JobCard.findOneAndUpdate(
-      { order: order._id },
-      { order: order._id, technician: technicianId, status: JOB_STATUS.OPEN, estimateAmount: order.estimatedCost },
-      { upsert: true, new: true }
-    ).then(async (jobCard) => {
-      if (jobCard && !jobCard.otp) {
-        jobCard.otp = await generateUniqueJobCardOtp();
-        await jobCard.save();
-      }
-    });
-
-    await notificationService.notifyTechnician(technicianId, NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED, {
       orderId: order._id,
-      scheduledAt: order.scheduledAt
+      action: NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED,
+      message: ids.length > 1 ? `${ids.length} technicians assigned` : 'Technician assigned',
+      metadata: { primaryTechnicianId: primaryId, technicianIds: ids },
+      performedBy: adminId
     });
+
+    let jobCard = await JobCard.findOneAndUpdate(
+      { order: order._id },
+      { order: order._id, technician: primaryId, status: JOB_STATUS.OPEN, estimateAmount: order.estimatedCost ?? 0 },
+      { upsert: true, new: true }
+    );
+    if (jobCard && !jobCard.otp) {
+      jobCard.otp = await generateUniqueJobCardOtp();
+      await jobCard.save();
+    }
+
+    for (const tid of ids) {
+      await notificationService.notifyTechnician(tid, NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED, {
+        orderId: order._id,
+        scheduledAt: order.scheduledAt
+      });
+    }
 
     await notificationService.notifyAdmin(NOTIFICATION_EVENTS.TECHNICIAN_ASSIGNED, {
       orderId: order._id,
-      technicianId
+      technicianId: primaryId,
+      technicianIds: ids
     });
 
-    // Send email notification to customer
     const [customer, technician] = await Promise.all([
       User.findById(order.customerUser).lean(),
-      User.findById(technicianId).lean()
+      User.findById(primaryId).lean()
     ]);
 
     if (customer?.email) {

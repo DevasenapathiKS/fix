@@ -69,6 +69,7 @@ const orderSchema = new mongoose.Schema(
     status: { type: String, enum: Object.values(ORDER_STATUS), default: ORDER_STATUS.NEW },
     notes: { type: String },
     assignedTechnician: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    assignedTechnicians: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     technicianResponseAt: { type: Date },
     technicianTracking: {
       lastCheckInAt: { type: Date },

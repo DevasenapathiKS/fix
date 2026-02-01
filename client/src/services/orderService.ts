@@ -89,6 +89,12 @@ export interface Order {
     email?: string
     mobile?: string
   } | null
+  assignedTechnicians?: Array<{
+    _id?: string
+    name?: string
+    email?: string
+    mobile?: string
+  } | null>
 }
 
 export const orderService = {
