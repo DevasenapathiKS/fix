@@ -386,6 +386,7 @@ export const AdminService = {
     if (customerId) query.customerUser = customerId;
     const orders = await Order.find(query)
       .populate('serviceCategory serviceItem assignedTechnician', 'name')
+      .populate('assignedTechnicians', 'name')
       .sort({ createdAt: -1 })
       .lean();
     
@@ -400,11 +401,18 @@ export const AdminService = {
       paymentStatusMap.set(String(jc.order), jc.paymentStatus || 'pending');
     });
     
-    // Add payment status to each order
-    return orders.map(order => ({
-      ...order,
-      paymentStatus: paymentStatusMap.get(String(order._id)) || 'pending'
-    }));
+    return orders.map((order) => {
+      const assignedTechs = order.assignedTechnicians?.length
+        ? order.assignedTechnicians
+        : order.assignedTechnician
+          ? [order.assignedTechnician]
+          : [];
+      return {
+        ...order,
+        assignedTechnicians: assignedTechs,
+        paymentStatus: paymentStatusMap.get(String(order._id)) || 'pending'
+      };
+    });
   },
 
   async listCustomers() {
@@ -860,6 +868,7 @@ export const AdminService = {
       .populate('serviceItem', 'name description basePrice')
       .populate('serviceCategory', 'name')
       .populate('assignedTechnician', 'name mobile email')
+      .populate('assignedTechnicians', 'name mobile email')
       .populate({ path: 'followUp.createdBy', select: 'name role' })
       .lean();
     if (!order) throw new ApiError(404, 'Order not found');
@@ -895,6 +904,7 @@ export const AdminService = {
         createdAt: order.createdAt,
         status: order.status,
         assignedTechnician: order.assignedTechnician,
+        assignedTechnicians: order.assignedTechnicians?.length ? order.assignedTechnicians : (order.assignedTechnician ? [order.assignedTechnician] : []),
         history,
         followUp: order.followUp
       },
@@ -1034,10 +1044,11 @@ export const AdminService = {
       if (!normalizedAttachments.length) {
         throw new ApiError(400, 'Attach at least one image or video for follow up');
       }
-      if (order.assignedTechnician) {
-        await TechnicianCalendar.deleteOne({ order: orderId });
+      if (order.assignedTechnician || (order.assignedTechnicians && order.assignedTechnicians.length)) {
+        await TechnicianCalendar.deleteMany({ order: orderId });
       }
       order.assignedTechnician = null;
+      order.assignedTechnicians = [];
       order.followUp = {
         reason,
         attachments: normalizedAttachments,
@@ -1051,8 +1062,8 @@ export const AdminService = {
       };
     }
 
-    if (status === ORDER_STATUS.CANCELLED && order.assignedTechnician) {
-      await TechnicianCalendar.deleteOne({ order: orderId });
+    if (status === ORDER_STATUS.CANCELLED && (order.assignedTechnician || (order.assignedTechnicians && order.assignedTechnicians.length))) {
+      await TechnicianCalendar.deleteMany({ order: orderId });
     }
 
     order.status = status;

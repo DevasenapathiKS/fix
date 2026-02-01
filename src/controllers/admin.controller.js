@@ -4,13 +4,18 @@ import { AdminService } from '../services/admin.service.js';
 import { successResponse } from '../utils/response.js';
 
 export const assignTechnician = asyncHandler(async (req, res) => {
-  const { technicianId } = req.body;
+  const { technicianId, technicianIds, slots } = req.body;
   const order = await AssignmentService.assignTechnician({
     orderId: req.params.orderId,
     technicianId,
+    technicianIds,
+    slots,
     adminId: req.user.id
   });
-  return successResponse(res, { data: order, message: 'Technician assigned' });
+  return successResponse(res, {
+    data: order,
+    message: (technicianIds?.length || (technicianId ? 1 : 0)) > 1 ? 'Technicians assigned' : 'Technician assigned'
+  });
 });
 
 export const upsertCategory = asyncHandler(async (req, res) => {

@@ -25,7 +25,7 @@ import { Select } from '../components/ui/Select';
 import { TextArea } from '../components/ui/TextArea';
 import { Modal } from '../components/ui/Modal';
 import { Drawer } from '../components/ui/Drawer';
-import { CalendarDaysIcon, CheckCircleIcon, PrinterIcon, TrashIcon, XCircleIcon, XMarkIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, CheckCircleIcon, PrinterIcon, TrashIcon, UserPlusIcon, XCircleIcon, XMarkIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDateTime } from '../utils/format';
 import { useSocket } from '../context/SocketContext';
@@ -174,6 +174,8 @@ export const OrdersPage = () => {
   const [imageViewer, setImageViewer] = useState<{ open: boolean; url: string; name: string }>({ open: false, url: '', name: '' });
   const [imageZoom, setImageZoom] = useState(100);
   const [assigningTech, setAssigningTech] = useState<string | null>(null);
+  const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
+  const [addAssistantMode, setAddAssistantMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   
@@ -254,6 +256,8 @@ export const OrdersPage = () => {
     setAssignModal({ order: null, open: false });
     setScheduleDrawer({ open: false, technicianId: null, name: '' });
     setSelectedCalendarSlots([]);
+    setSelectedTechnicianIds([]);
+    setAddAssistantMode(false);
   };
 
   const openSchedulePanel = (technician: TechnicianCandidate) => {
@@ -268,6 +272,51 @@ export const OrdersPage = () => {
   const handleAssignTechnician = (technicianId: string) => {
     if (!assignModal.order) return;
     assignMutation.mutate({ orderId: assignModal.order._id, technicianId });
+  };
+
+  const handleAssignSelectedTechnicians = () => {
+    if (!assignModal.order) return;
+    const currentIds = (() => {
+      const order = assignModal.order as any;
+      const assigned = order?.assignedTechnicians?.length ? order.assignedTechnicians : order?.assignedTechnician ? [order.assignedTechnician] : [];
+      return assigned.map((t: any) => (typeof t === 'object' ? t?._id : t)).filter(Boolean) as string[];
+    })();
+    const merged = addAssistantMode
+      ? [...new Set([...currentIds, ...selectedTechnicianIds])]
+      : selectedTechnicianIds;
+    if (merged.length === 0) return;
+    assignMutation.mutate({ orderId: assignModal.order._id, technicianIds: merged });
+  };
+
+  const toggleTechnicianSelection = (techId: string) => {
+    setSelectedTechnicianIds((prev) =>
+      prev.includes(techId) ? prev.filter((id) => id !== techId) : [...prev, techId]
+    );
+  };
+
+  const setTechnicianAsPrimary = (techId: string) => {
+    setSelectedTechnicianIds((prev) => {
+      if (!prev.includes(techId)) return prev;
+      return [techId, ...prev.filter((id) => id !== techId)];
+    });
+  };
+
+  const openAddAssistant = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const baseOrder = jobCardDetail?.order || jobCardModal.order;
+    const orderId = (baseOrder as any)?._id || (baseOrder as any)?.id || jobCardModal.order?._id;
+    if (!orderId || !jobCardModal.order) return;
+    const detailOrder = jobCardDetail?.order as any;
+    const assignedTechs = detailOrder?.assignedTechnicians?.length ? detailOrder.assignedTechnicians : null;
+    const order: Order = {
+      ...(jobCardModal.order as Order),
+      _id: orderId,
+      assignedTechnician: detailOrder?.assignedTechnician || assignedTechs?.[0] || jobCardModal.order.assignedTechnician,
+      assignedTechnicians: assignedTechs ?? (jobCardModal.order.assignedTechnician ? [jobCardModal.order.assignedTechnician] : [])
+    };
+    setAddAssistantMode(true);
+    setAssignModal({ order, open: true });
+    setSelectedTechnicianIds([]);
   };
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
@@ -379,8 +428,6 @@ export const OrdersPage = () => {
   const serviceBasePrice = typeof serviceItemInfo === 'string' ? 0 : serviceItemInfo?.basePrice ?? 0;
   const servicePrice = jobCard?.estimateAmount ?? jobCardDetail?.order?.estimatedCost ?? serviceBasePrice;
   useEffect(() => {
-    console.log('Job Card Detail:', jobCardDetail);
-    console.log('Job Card:', jobCard);
     const nextStatus = jobCardDetail?.order?.status;
     if (nextStatus && jobStatusValues.includes(nextStatus)) {
       setJobStatusChoice(nextStatus);
@@ -789,12 +836,32 @@ export const OrdersPage = () => {
   }, [rescheduleModal.open, selectedDate, slotsForSelectedDay, selectedSlotId, rescheduleModal.order]);
 
   const assignMutation = useMutation({
-    mutationFn: ({ orderId, technicianId }: { orderId: string; technicianId: string }) => OrdersAPI.assign(orderId, technicianId),
-    onMutate: ({ technicianId }) => setAssigningTech(technicianId),
-    onSuccess: () => {
-      toast.success('Technician assigned');
+    mutationFn: ({
+      orderId,
+      technicianId,
+      technicianIds,
+      slots
+    }: {
+      orderId: string;
+      technicianId?: string;
+      technicianIds?: string[];
+      slots?: Array<{ start: string; end: string }>;
+    }) =>
+      OrdersAPI.assign(orderId, {
+        ...(technicianIds?.length ? { technicianIds } : { technicianId: technicianId! }),
+        ...(slots?.length ? { slots } : {})
+      }),
+    onMutate: ({ technicianId }) => setAssigningTech(technicianId || null),
+    onSuccess: (_, variables) => {
+      let msg = 'Technician assigned';
+      if ((variables.technicianIds?.length || 0) > 1) msg = 'Technicians assigned';
+      toast.success(msg);
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order-jobcard', variables.orderId] });
+      queryClient.invalidateQueries({ queryKey: ['technician-schedule'] });
       closeAssignModal();
+      setSelectedTechnicianIds([]);
+      setAddAssistantMode(false);
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Assignment failed'),
     onSettled: () => setAssigningTech(null)
@@ -806,7 +873,7 @@ export const OrdersPage = () => {
       // First reschedule the order to the new time slot
       await OrdersAPI.reschedule(orderId, { newStart, newEnd });
       // Then assign the technician
-      return OrdersAPI.assign(orderId, technicianId);
+      return OrdersAPI.assign(orderId, { technicianId });
     },
     onSuccess: () => {
       toast.success('Order rescheduled and technician assigned!');
@@ -1285,14 +1352,80 @@ export const OrdersPage = () => {
         </div>
       </Card>
 
-      <Modal open={assignModal.open} onClose={() => { if (!scheduleDrawer.open) closeAssignModal(); }} title="Assign Technician">
+      <Modal
+        open={assignModal.open}
+        onClose={() => { if (!scheduleDrawer.open) closeAssignModal(); }}
+        title={addAssistantMode ? 'Add assistant technician(s)' : 'Assign Technician(s)'}
+      >
+        {addAssistantMode && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 mb-4">
+            <p className="text-sm font-medium text-emerald-800">
+              Add assistant technician(s) to work alongside the primary
+            </p>
+            <p className="text-xs text-emerald-700 mt-1">
+              Select one or more technicians below, then click &quot;Add assistants&quot;. They will be added to the team.
+            </p>
+          </div>
+        )}
         <p className="text-sm text-slate-500">
           Technicians shown are certified for{' '}
           <span className="font-semibold text-slate-900">{assignModal.order?.serviceItem?.name}</span> and reflect real-time slot availability.
         </p>
-        {assignModal.order?.assignedTechnician && (
+        {(assignModal.order as any)?.assignedTechnicians?.length > 0 && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Currently assigned to <span className="font-semibold">{assignModal.order.assignedTechnician.name}</span>. Select another technician below to reassign.
+            Currently assigned: <span className="font-semibold">
+              {(assignModal.order as any).assignedTechnicians
+                .map((t: any) => (typeof t === 'object' ? t?.name : t))
+                .filter(Boolean)
+                .join(', ')}
+            </span>
+            {(assignModal.order as any).assignedTechnicians?.length > 1 && ' (first = primary)'}.
+            Select technician(s) below to reassign. First selected = primary.
+          </div>
+        )}
+        {assignModal.order?.assignedTechnician && !(assignModal.order as any)?.assignedTechnicians?.length && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Currently assigned to <span className="font-semibold">{assignModal.order.assignedTechnician.name}</span>. Select technician(s) below to reassign. First selected = primary.
+          </div>
+        )}
+        {selectedTechnicianIds.length > 0 && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p className="font-semibold">
+              {addAssistantMode
+                ? `Adding assistants to ${(assignModal.order as any)?.assignedTechnician?.name || 'primary'}.`
+                : `${selectedTechnicianIds.length} technician(s) selected — first = primary`}
+            </p>
+            <div className="mt-2 space-y-1">
+              {selectedTechnicianIds.map((id, idx) => {
+                const tech = candidates.find((c) => c.id === id);
+                return (
+                  <div key={id} className="flex items-center justify-between text-xs">
+                    <span>
+                      {idx === 0 ? '• Primary: ' : '• Assisted by: '}
+                      <span className="font-medium">{tech?.name || id}</span>
+                    </span>
+                    {idx > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTechnicianAsPrimary(id)}
+                        className="text-emerald-700 hover:underline font-medium"
+                      >
+                        Set as primary
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <Button
+              type="button"
+              onClick={handleAssignSelectedTechnicians}
+              disabled={assignMutation.isPending}
+              loading={assignMutation.isPending}
+              className="mt-2 w-full"
+            >
+              {addAssistantMode ? 'Add assistants' : 'Assign selected'}
+            </Button>
           </div>
         )}
         {loadingCandidates && (
@@ -1303,15 +1436,24 @@ export const OrdersPage = () => {
         )}
         <div className="space-y-3">
           {candidates.map((tech) => {
-            const currentTechId = assignModal.order?.assignedTechnician?._id;
-            const isCurrent = currentTechId ? currentTechId === tech.id : false;
+            const assignedTechs = (assignModal.order as any)?.assignedTechnicians || (assignModal.order?.assignedTechnician ? [assignModal.order.assignedTechnician] : []);
+            const isCurrent = assignedTechs.some((t: any) => (typeof t === 'object' ? t?._id : t) === tech.id);
+            const isSelected = selectedTechnicianIds.includes(tech.id);
             return (
               <div
                 key={tech.id}
                 className={`flex flex-col gap-4 rounded-2xl border p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between ${isCurrent ? 'border-amber-200 bg-amber-50/60' : 'border-slate-100'
                   }`}
               >
-                <div className="space-y-2">
+                <div className="flex items-start gap-3 flex-1">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleTechnicianSelection(tech.id)}
+                    disabled={!tech.isAvailable}
+                    className="mt-1.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                <div className="space-y-2 flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <p className="font-semibold text-slate-900">{tech.name || 'Unnamed technician'}</p>
                     <span
@@ -1328,7 +1470,8 @@ export const OrdersPage = () => {
                         </>
                       )}
                     </span>
-                    {isCurrent && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Current</span>}
+                    {isCurrent && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Assigned</span>}
+                    {isSelected && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Selected</span>}
                   </div>
                   <p className="text-xs text-slate-500">
                     {(tech.skills?.length ? tech.skills.slice(0, 3).join(', ') : 'Generalist')}
@@ -1346,7 +1489,8 @@ export const OrdersPage = () => {
                     </p>
                   ) : null}
                 </div>
-                <div className="flex flex-col gap-2 sm:items-end">
+                </div>
+                <div className="flex flex-col gap-2 sm:items-end flex-shrink-0">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1358,10 +1502,10 @@ export const OrdersPage = () => {
                   <Button
                     type="button"
                     onClick={() => handleAssignTechnician(tech.id)}
-                    disabled={!tech.isAvailable || isCurrent || assignMutation.isPending}
+                    disabled={!tech.isAvailable || assignMutation.isPending}
                     loading={assignMutation.isPending && assigningTech === tech.id}
                   >
-                    {assignModal.order?.assignedTechnician ? 'Reassign' : 'Assign'}
+                    Assign as primary
                   </Button>
                 </div>
               </div>
@@ -2258,6 +2402,57 @@ export const OrdersPage = () => {
                   <p className="mt-2 text-xs text-slate-500">Syncs both job card and order status for finance follow-ups.</p>
                 </div>
 
+                {/* Technician Team - prominent Add assistant */}
+                {(jobCard?.technician || (jobCardDetail?.order as any)?.assignedTechnicians?.length) && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-slate-900">Technician team</h4>
+                      {jobCardDetail?.order?.status && !['completed', 'cancelled'].includes(jobCardDetail.order.status) && (
+                        <Button
+                          variant="secondary"
+                          onClick={openAddAssistant}
+                          icon={<UserPlusIcon className="h-4 w-4" />}
+                          className="text-xs"
+                        >
+                          Add assistant
+                        </Button>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {(jobCardDetail?.order as any)?.assignedTechnicians?.length > 0
+                        ? (jobCardDetail?.order as any).assignedTechnicians.map((t: any, idx: number) => {
+                            const name = typeof t === 'object' ? t?.name : t;
+                            const mobile = typeof t === 'object' ? t?.mobile : '';
+                            const isPrimary = idx === 0;
+                            return (
+                              <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">
+                                    {name}
+                                    {isPrimary && <span className="ml-2 text-xs font-normal text-emerald-600">Primary</span>}
+                                  </p>
+                                  {mobile && <p className="text-xs text-slate-500">{mobile}</p>}
+                                </div>
+                              </div>
+                            );
+                          })
+                        : jobCard?.technician && (
+                            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                              <div>
+                                <p className="text-sm font-medium text-slate-900">
+                                  {typeof jobCard.technician === 'string' ? jobCard.technician : jobCard.technician.name}
+                                  <span className="ml-2 text-xs font-normal text-emerald-600">Primary</span>
+                                </p>
+                                {typeof jobCard.technician !== 'string' && jobCard.technician.mobile && (
+                                  <p className="text-xs text-slate-500">{jobCard.technician.mobile}</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-2xl border border-slate-900/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white">
                   <p className="text-xs uppercase tracking-[0.35em] text-white/70">Schedule</p>
                   <p className="mt-2 text-lg font-semibold">{jobCardDetail.order.preferredSlot?.label || 'Scheduled slot'}</p>
@@ -2266,13 +2461,28 @@ export const OrdersPage = () => {
                     <span className="mx-1 text-white/50">→</span>
                     {jobCardDetail.order.timeWindowEnd ? formatDateTime(jobCardDetail.order.timeWindowEnd) : '—'}
                   </p>
-                  {jobCard?.technician && (
+                  {(jobCardDetail?.order as any)?.assignedTechnicians?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-white/70 font-semibold">Technicians:</p>
+                      {(jobCardDetail?.order as any).assignedTechnicians.map((t: any, idx: number) => {
+                        const name = typeof t === 'object' ? t?.name : t;
+                        const mobile = typeof t === 'object' ? t?.mobile : '';
+                        const isPrimary = idx === 0;
+                        return (
+                          <p key={idx} className="text-xs text-white/70 ml-2">
+                            {name}{mobile ? ` · ${mobile}` : ''}
+                            {isPrimary && ' (primary)'}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {jobCard?.technician && !(jobCardDetail?.order as any)?.assignedTechnicians?.length && (
                     <p className="mt-2 text-xs text-white/70">
                       Technician:{' '}
-                      {typeof jobCard.technician === 'string'
-                        ? jobCard.technician
-                        : jobCard.technician.name}{' '}
-                      {typeof jobCard.technician !== 'string' ? `· ${jobCard.technician.mobile ?? ''}` : ''}
+                      {typeof jobCard.technician === 'string' ? jobCard.technician : jobCard.technician.name}
+                      {typeof jobCard.technician !== 'string' && jobCard.technician.mobile ? ` · ${jobCard.technician.mobile}` : ''}
+                      <span className="text-white/50"> (primary)</span>
                     </p>
                   )}
                 </div>

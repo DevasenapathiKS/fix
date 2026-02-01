@@ -67,8 +67,8 @@ export const OrdersAPI = {
       })
     ),
   create: (payload: any) => extract<Order>(apiClient.post<ApiSuccess<Order>>('/admin/orders', payload)),
-  assign: (orderId: string, technicianId: string) =>
-    extract<Order>(apiClient.post<ApiSuccess<Order>>(`/admin/orders/${orderId}/assign`, { technicianId })),
+  assign: (orderId: string, payload: { technicianId?: string; technicianIds?: string[]; slots?: Array<{ start: string; end: string }> }) =>
+    extract<Order>(apiClient.post<ApiSuccess<Order>>(`/admin/orders/${orderId}/assign`, payload)),
   candidates: (orderId: string) =>
     extract<TechnicianCandidate[]>(apiClient.get<ApiSuccess<TechnicianCandidate[]>>(`/admin/orders/${orderId}/technicians`)),
   jobCard: (orderId: string) =>

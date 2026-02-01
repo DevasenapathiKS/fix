@@ -60,7 +60,38 @@ router.get('/orders', adminOrders);
 
 router.post(
   '/orders/:orderId/assign',
-  validate([param('orderId').isMongoId(), body('technicianId').isMongoId()]),
+  validate([
+    param('orderId').isMongoId(),
+    body('technicianId')
+      .optional({ values: 'null' })
+      .isMongoId()
+      .withMessage('technicianId must be a valid MongoDB ObjectId'),
+    body('technicianIds')
+      .optional()
+      .isArray()
+      .withMessage('technicianIds must be an array'),
+    body()
+      .custom((value) => {
+        const hasSingle = value.technicianId && String(value.technicianId).length === 24;
+        const hasArray = Array.isArray(value.technicianIds) && value.technicianIds.length > 0;
+        if (!hasSingle && !hasArray) {
+          throw new Error('Provide technicianId or technicianIds (non-empty array)');
+        }
+        if (hasArray) {
+          const invalid = value.technicianIds.find((id) => !id || String(id).length !== 24);
+          if (invalid !== undefined) {
+            throw new Error('Each technicianIds element must be a valid MongoDB ObjectId');
+          }
+        }
+        if (Array.isArray(value.slots) && value.slots.length > 0) {
+          const invalidSlot = value.slots.find((s) => !s || !s.start || !s.end);
+          if (invalidSlot) {
+            throw new Error('Each slot must have start and end');
+          }
+        }
+        return true;
+      })
+  ]),
   assignTechnician
 );
 
